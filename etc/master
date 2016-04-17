@@ -1,0 +1,21 @@
+# -*-yaml-*-
+color: False
+env_order: []
+file_ignore_glob:
+  - '*.pyc'
+  - '*~'
+  - '#*'
+  - '.#*'
+file_ignore_regex:
+  - '/\.git($|/)'
+file_roots:
+  base:
+    - /srv/salt
+log_level: quiet
+log_level_logfile: info
+strip_colors: True
+user: vagrant
+# https://docs.saltstack.com/en/latest/topics/reactor/index.html#minion-start-reactor
+reactor:
+  - 'minion_start':
+    - /srv/reactor/sync-all.sls
