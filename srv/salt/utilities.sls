@@ -4,6 +4,8 @@ utilities:
       - emacs-nox
       - screen
       - telnet
+      - tar
+      - lsof
 
 /etc/screenrc:
   file.append:
