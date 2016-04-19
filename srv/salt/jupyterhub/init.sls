@@ -3,12 +3,12 @@ include:
 
 {%
     set zz = dict(
-	host_conf_d='/var/lib/jupyterhub/conf/',
-	guest_conf_d='/srv/jupyterhub/conf/',
-	config_base='jupyterhub_config.py',
-	service_base='jupyterhub.service',
-	salt_url='salt://jupyterhub/',
-	cookie_base='cookie',
+        host_conf_d='/var/lib/jupyterhub/conf/',
+        guest_conf_d='/srv/jupyterhub/conf/',
+        config_base='jupyterhub_config.py',
+        service_base='jupyterhub.service',
+        salt_url='salt://jupyterhub/',
+        cookie_base='cookie',
     )
 %}
 {%
@@ -17,7 +17,7 @@ include:
         guest_cookie=zz.guest_conf_d + zz.cookie_base,
         host_config=zz.host_conf_d + zz.config_base,
         guest_config=zz.guest_conf_d + zz.config_base,
-	systemd_service='/etc/systemd/system/' + zz.service_base,
+        systemd_service='/etc/systemd/system/' + zz.service_base,
     )
 %}
 {{ zz.systemd_service }}:
@@ -48,7 +48,7 @@ include:
     - template: jinja
     - user: root
     - group: root
-    - mode: 440
+    - mode: 400
     - context:
       zz: {{ zz }}
 
@@ -58,7 +58,7 @@ include:
     - dir_mode: 750
     - user: root
     - group: root
-    - mode: 440
+    - mode: 400
 
 jupyterhub:
   service.running:
@@ -98,4 +98,3 @@ jupyterhub:
 #chown vagrant:vagrant /var/db/sirepo
 #echo 'apa11b.bivio.biz:/var-on-zfs/db/sirepo /var/db/sirepo nfs nolock' >> /etc/fstab
 #mount -a
-
