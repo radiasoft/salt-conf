@@ -9,6 +9,7 @@ include:
         service_base='jupyterhub.service',
         salt_url='salt://jupyterhub/',
         cookie_base='cookie',
+        docker_build_d='/root/docker-build',
     )
 %}
 {%
@@ -60,6 +61,15 @@ include:
     - group: root
     - mode: 400
 
+jupyterhub-image:
+  cmd.script:
+    - source: salt://jupyterhub/docker-build.sh
+    - template: jinja
+    - unless:
+      - test -n "$(docker images -q jupyterhub)"
+    - require:
+      - service: docker
+
 jupyterhub:
   service.running:
     - enable: True
@@ -71,6 +81,7 @@ jupyterhub:
       - file: {{ zz.host_cookie }}
       - file: {{ zz.host_config }}
       - file: {{ zz.systemd_service }}
+      - cmd: jupyterhub-image
 
 #cat > /etc/sysctl.d/40-bivio-shm.conf <<'EOF'
 # Controls the maximum size of a message, in bytes
