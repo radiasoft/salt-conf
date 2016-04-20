@@ -8,14 +8,11 @@ include:
         config_base='jupyterhub_config.py',
         service_base='jupyterhub.service',
         salt_url='salt://jupyterhub/',
-        cookie_base='cookie',
         docker_build_d='/root/docker-build',
     )
 %}
 {%
     set _dummy = zz.update(
-        host_cookie=zz.host_conf_d + zz.cookie_base,
-        guest_cookie=zz.guest_conf_d + zz.cookie_base,
         host_config=zz.host_conf_d + zz.config_base,
         guest_config=zz.guest_conf_d + zz.config_base,
         systemd_service='/etc/systemd/system/' + zz.service_base,
@@ -53,14 +50,6 @@ include:
     - context:
       zz: {{ zz }}
 
-{{ zz.host_cookie }}:
-  file.managed:
-    - contents_pillar: jupyterhub:cookie_secret
-    - dir_mode: 750
-    - user: root
-    - group: root
-    - mode: 400
-
 #TODO: Need to know when to rebuild. For now, we just: docker rmi jupyter:beta
 jupyterhub-image:
   cmd.script:
@@ -81,7 +70,6 @@ jupyterhub:
     # (it acts like require in this case). We want the server to be
     # running always when salt runs so it has to be watch.
     - watch:
-      - file: {{ zz.host_cookie }}
       - file: {{ zz.host_config }}
       - file: {{ zz.systemd_service }}
       - cmd: jupyterhub-image
