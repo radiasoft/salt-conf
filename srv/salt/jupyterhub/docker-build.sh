@@ -16,7 +16,7 @@ tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
     cat >> build <<EOF
 set -e
 user={{ pillar.jupyterhub.admin_user }}
-id=$(id -u {{ pillar.jupyterhub.admin_user }})
+id=$(pillar.jupyterhub.admin_id)
 groupadd -g "$id" "$user"
 useradd -m -s /bin/bash -g "$user" -u "$id" "$user"
 echo "$user:{{ pillar.jupyterhub.admin_passwd }}" | chpasswd -e
