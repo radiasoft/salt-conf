@@ -14,7 +14,7 @@ id={{ pillar.jupyterhub.admin_id }}
 groupadd -g "$id" "$user"
 useradd -m -s /bin/bash -g "$user" -u "$id" "$user"
 echo "$user:{{ pillar.jupyterhub.admin_passwd }}" | chpasswd
-pip install 'ipython[notebook]'
+pip3 install 'ipython[notebook]' oauthenticator
 rm -rf ~/.cache
 cd /
 rm -rf /build
