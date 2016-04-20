@@ -1,5 +1,5 @@
 #!/bin/bash
-{% from "jupyterhub/init.sls" import zz with context %}
+tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
 (
     set -e
     export TMPDIR=/tmp/docker-build-$RANDOM
@@ -30,7 +30,6 @@ FROM jupyter/jupyterhub
 COPY . /build
 RUN ["bash", "/build/build"]
 EOF
-    tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
     docker build -t jupyterhub .
     docker tag jupyterhub:latest "$tag"
     docker tag -f jupyterhub:latest "jupyter:{{ pillar.pykern_pkconfig_channel }}"
