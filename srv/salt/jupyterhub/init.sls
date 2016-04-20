@@ -50,6 +50,9 @@ include:
     - context:
       zz: {{ zz }}
 
+{{ zz.host_conf_d }}/cookie_secret:
+  file.absent: []
+
 #TODO: Need to know when to rebuild. For now, we just: docker rmi jupyter:beta
 jupyterhub-image:
   cmd.script:
