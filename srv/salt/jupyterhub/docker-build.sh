@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
 (
     set -e
@@ -13,7 +14,7 @@ tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
     # Need to have this, due to ONBUILD image
     # https://github.com/jupyterhub/jupyterhub/issues/491
     touch jupyterhub_config.py
-    cat >> build <<EOF
+    cat >> build <<'EOF'
 set -e
 user={{ pillar.jupyterhub.admin_user }}
 id={{ pillar.jupyterhub.admin_id }}
