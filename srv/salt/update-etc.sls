@@ -1,5 +1,5 @@
-/etc/login.defs:
-  file.line:
-    - match: "^#\\s*CREATE_HOME"
-    - contents: CREATE_HOME no
-    - mode: replace
+createhome-no:
+  file.replace:
+    - path: /etc/login.defs
+    - pattern: "^#\\s*CREATE_HOME.*"
+    - repl: CREATE_HOME no
