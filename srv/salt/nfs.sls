@@ -1,5 +1,5 @@
 /var/nfs/apa11/home:
-  pkgs.installed:
+  pkg.installed:
     - pkgs:
       - nfs-utils
   file.directory:
