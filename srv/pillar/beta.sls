@@ -1,1 +1,1 @@
-bivio_service_channel: beta
+pykern_pkconfig_channel: beta

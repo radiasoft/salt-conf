@@ -65,8 +65,10 @@ jupyterhub-image:
   cmd.script:
     - source: salt://jupyterhub/docker-build.sh
     - template: jinja
+    # So script output is shown (it always succeeds)
+    - stateful: True
     - unless:
-      - test -n "$(docker images -q jupyterhub)"
+      - test -n "$(docker images -q jupyterhub:{{ pykern_pkconfig_channel }}"
     - require:
       - service: docker
 

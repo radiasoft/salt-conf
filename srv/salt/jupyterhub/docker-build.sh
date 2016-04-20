@@ -24,4 +24,8 @@ FROM jupyter/jupyterhub
 ADD . /build
 RUN /build/build
 EOF
+tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
 docker build -t jupyterhub .
+docker tag jupyterhub:latest "$tag"
+docker tag -f jupyterhub:latest "jupyter:{{ pykern_pkconfig_channel }}"
+echo "changed=yes comment='Build: $tag; {{ pykern_pkconfig_channel }}'"
