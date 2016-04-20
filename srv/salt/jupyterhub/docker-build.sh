@@ -19,8 +19,8 @@ id=$(id -u {{ pillar.jupyterhub.admin_user }})
 groupadd -g "$id" "$user"
 useradd -m -s /bin/bash -g "$user" -u "$id" "$user"
 echo "$user:{{ pillar.jupyterhub.admin_passwd }}" | chpasswd -e
-# Do we need this? oauthenticator
 pip3 install 'ipython[notebook]'
+pip3 install git+git://github.com/jupyter/oauthenticator.git
 rm -rf ~/.cache
 cd /
 rm -rf /build
