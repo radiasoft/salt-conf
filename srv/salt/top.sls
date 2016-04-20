@@ -1,6 +1,7 @@
 base:
   '*':
     - update-dnf
+    - update-etc
     - minion
     - utilities
     - nfs
