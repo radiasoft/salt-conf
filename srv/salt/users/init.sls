@@ -1,3 +1,6 @@
+include:
+  - update-etc
+
 {% for name, uid  in pillar.users.iteritems() %}
 {{ name }}:
   group.present:
@@ -5,6 +8,10 @@
   user.present:
     - uid: {{ uid }}
     - gid: {{ uid }}
+    # https://github.com/saltstack/salt/issues/28726
+    # This doesn't work without update-etc./etc/etc/login.defs
+    - require:
+      - file: /etc/login.defs
     - createhome: False
     - enforce_password: False
 /home/{{ name }}:
