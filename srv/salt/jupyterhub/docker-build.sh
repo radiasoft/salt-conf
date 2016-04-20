@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+channel_tag=$1
 tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
 (
     set -e
@@ -34,9 +35,9 @@ RUN ["bash", "/build/build"]
 EOF
     docker build -t jupyterhub .
     docker tag jupyterhub:latest "$tag"
-    docker tag -f jupyterhub:latest "jupyter:{{ pillar.pykern_pkconfig_channel }}"
+    docker tag -f jupyterhub:latest "$channel_tag"
 ) 1>&2
 if (( $? )); then
     exit 1
 fi
-echo "changed=yes comment='Build: $tag; {{ pillar.pykern_pkconfig_channel }}'"
+echo "changed=yes comment='Build: $tag; $channel_tag'"

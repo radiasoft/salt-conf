@@ -60,6 +60,7 @@ jupyterhub-image:
     - template: jinja
     # So script output is shown (it always succeeds)
     - stateful: True
+    - args: "jupyterhub:{{ pillar.pykern_pkconfig_channel }}"
     - unless:
       - test -n "$(docker images -q jupyterhub:{{ pillar.pykern_pkconfig_channel }})"
     - require:
