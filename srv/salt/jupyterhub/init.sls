@@ -68,7 +68,7 @@ jupyterhub-image:
     # So script output is shown (it always succeeds)
     - stateful: True
     - unless:
-      - test -n "$(docker images -q jupyterhub:{{ pykern_pkconfig_channel }}"
+      - test -n "$(docker images -q jupyterhub:{{ pillar.pykern_pkconfig_channel }}"
     - require:
       - service: docker
 
