@@ -28,7 +28,7 @@ EOF
     cat >> Dockerfile <<'EOF'
 FROM jupyter/jupyterhub
 ADD . /build
-RUN /build/build
+RUN "bash /build/build"
 EOF
     tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
     docker build -t jupyterhub .
