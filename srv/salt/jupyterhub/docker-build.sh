@@ -10,7 +10,7 @@ mkdir "$TMPDIR"
 cd "$TMPDIR"
 cat >> build <<EOF
 user={{ pillar.jupyterhub.admin_user }}
-id={{ pillar.jupyterhub.admin_id }}
+id=$(id -u {{ pillar.jupyterhub.admin_user }})
 groupadd -g "$id" "$user"
 useradd -m -s /bin/bash -g "$user" -u "$id" "$user"
 echo "$user:{{ pillar.jupyterhub.admin_passwd }}" | chpasswd
