@@ -1,6 +1,6 @@
 /etc/salt/call-apply.sh:
   file.managed:
-    - content: "salt-call saltutil.sync_all && salt-call saltutil.refresh_pillar && salt-call -l debug state.apply 2>&1 | tee err"
+    - contents: "salt-call saltutil.sync_all && salt-call saltutil.refresh_pillar && salt-call -l debug state.apply 2>&1 | tee err"
     - user: root
     - group: root
     - mode: 550
