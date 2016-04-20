@@ -1,7 +1,7 @@
 comsol-pkgs:
   pkg.installed:
     - pkgs:
-      - xauth
+      - xorg-x11-xauth
       - xterm
       - libXtst
       - redhat-lsb-core
