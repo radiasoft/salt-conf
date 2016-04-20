@@ -61,6 +61,7 @@ include:
     - group: root
     - mode: 400
 
+#TODO: Need to know when to rebuild. For now, we just: docker rmi jupyter:beta
 jupyterhub-image:
   cmd.script:
     - source: salt://jupyterhub/docker-build.sh
