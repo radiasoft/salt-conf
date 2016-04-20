@@ -1,4 +1,5 @@
 #!/bin/bash
+{% from "jupyterhub/init.sls" import zz with context %}
 (
     set -e
     export TMPDIR=/tmp/docker-build-$RANDOM
@@ -9,13 +10,17 @@
     trap exit_trap EXIT
     mkdir "$TMPDIR"
     cd "$TMPDIR"
+    # Need to have this, due to ONBUILD image
+    # https://github.com/jupyterhub/jupyterhub/issues/491
+    touch jupyterhub_config.py
     cat >> build <<EOF
 user={{ pillar.jupyterhub.admin_user }}
 id=$(id -u {{ pillar.jupyterhub.admin_user }})
 groupadd -g "$id" "$user"
 useradd -m -s /bin/bash -g "$user" -u "$id" "$user"
 echo "$user:{{ pillar.jupyterhub.admin_passwd }}" | chpasswd -e
-pip3 install 'ipython[notebook]' oauthenticator
+# Do we need this? oauthenticator
+pip3 install 'ipython[notebook]'
 rm -rf ~/.cache
 cd /
 rm -rf /build
