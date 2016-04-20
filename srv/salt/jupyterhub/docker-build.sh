@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 channel_tag=$1
-tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
+base=jupyterhub
+tag=$base:$(date -u +%Y%m%d.%H%M%S)
 (
     set -e
     export TMPDIR=/tmp/docker-build-$RANDOM
@@ -33,9 +34,9 @@ FROM jupyter/jupyterhub
 COPY . /build
 RUN ["bash", "/build/build"]
 EOF
-    docker build -t jupyterhub .
-    docker tag jupyterhub:latest "$tag"
-    docker tag -f jupyterhub:latest "$channel_tag"
+    docker build -t $base .
+    docker tag $base:latest "$tag"
+    docker tag -f $base:latest "$channel_tag"
 ) 1>&2
 if (( $? )); then
     exit 1
