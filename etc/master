@@ -6,6 +6,7 @@ file_ignore_glob:
   - '*~'
   - '#*'
   - '.#*'
+failhard: True
 file_ignore_regex:
   - '/\.git($|/)'
 file_roots:
