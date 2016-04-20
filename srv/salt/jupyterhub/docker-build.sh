@@ -27,7 +27,7 @@ rm -rf /build
 EOF
     cat >> Dockerfile <<'EOF'
 FROM jupyter/jupyterhub
-ADD . /build
+COPY . /build
 RUN "bash /build/build"
 EOF
     tag=jupyter:$(date -u +%Y%m%d.%H%M%S)
