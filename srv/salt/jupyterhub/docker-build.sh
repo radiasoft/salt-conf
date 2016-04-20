@@ -30,4 +30,7 @@ EOF
     docker tag jupyterhub:latest "$tag"
     docker tag -f jupyterhub:latest "jupyter:{{ pillar.pykern_pkconfig_channel }}"
 ) 1>&2
+if (( $? )); then
+    exit 1
+fi
 echo "changed=yes comment='Build: $tag; {{ pillar.pykern_pkconfig_channel }}'"
