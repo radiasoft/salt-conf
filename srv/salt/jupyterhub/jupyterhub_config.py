@@ -9,3 +9,6 @@ c.JupyterHub.authenticator_class = 'oauthenticator.GitHubOAuthenticator'
 c.GitHubOAuthenticator.oauth_callback_url = 'https://jupyter.radiasoft.org/hub/oauth_callback'
 c.GitHubOAuthenticator.client_id = '{{ pillar.jupyterhub.github_client_id }}'
 c.GitHubOAuthenticator.client_secret = '{{ pillar.jupyterhub.github_client_secret }}'
+c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
+from IPython.utils.localinterfaces import public_ips
+c.JupyterHub.hub_ip = public_ips()[0]
