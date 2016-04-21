@@ -103,4 +103,4 @@ remove-jupyter-containers:
   cmd.run:
     - name: docker rm -f $(docker ps -q -f 'name=jupyter-')
     - onchanges:
-        service: jupyterhub
+      - service: jupyterhub
