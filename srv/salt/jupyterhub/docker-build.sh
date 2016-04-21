@@ -18,11 +18,6 @@ tag=$base:$(date -u +%Y%m%d.%H%M%S)
     touch jupyterhub_config.py
     cat >> build <<'EOF'
 set -e
-user={{ pillar.jupyterhub.admin_user }}
-id={{ pillar.jupyterhub.admin_id }}
-#groupadd -g "$id" "$user"
-#useradd -m -s /bin/bash -g "$user" -u "$id" "$user"
-#echo "$user:{{ pillar.jupyterhub.admin_passwd }}" | chpasswd -e
 pip install 'ipython[notebook]'
 pip install git+git://github.com/jupyterhub/oauthenticator.git
 pip install git+git://github.com/jupyterhub/dockerspawner.git
