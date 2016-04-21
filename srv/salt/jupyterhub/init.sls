@@ -21,7 +21,7 @@ include:
 %}
 jupyterhub-pkgs:
   pkg.installed:
-    pkgs:
+    - pkgs:
       - policycoreutils
       - policycoreutils-python
       - checkpolicy
