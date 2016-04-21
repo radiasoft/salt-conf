@@ -35,7 +35,7 @@ EOF
 
     checkmodule -M -m "$m".te -o "$m".mod
     semodule_package -m "$m".mod -o "$m".pp
-    semodule -i "$m"
+    semodule -i "$m".pp
 ) 1>&2
 if (( $? )); then
     exit 1
