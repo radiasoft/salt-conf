@@ -9,6 +9,7 @@ include:
         service_base='jupyterhub.service',
         salt_url='salt://jupyterhub/',
         docker_build_d='/root/docker-build',
+        docker_image='jupyterhub:' + pillar.pykern_pkconfig_channel,
     )
 %}
 {%
@@ -18,10 +19,28 @@ include:
         systemd_service='/etc/systemd/system/' + zz.service_base,
     )
 %}
+jupyterhub-pkgs:
+  pkg.installed:
+    pkgs:
+      - policycoreutils
+      - policycoreutils-python
+      - checkpolicy
+
+jupyterhub-selinux:
+  cmd.script:
+    - source: salt://jupyterhub/docker-selinux.sh
+    - stateful: True
+    - require:
+      - service: docker
+      - pkg: jupyterhub-pkgs
+# To test: python -c 'import docker; docker.Client(base_url="unix://var/run/docker.sock", version="auto").containers()'
+
 {{ zz.systemd_service }}:
   file.managed:
     - require:
       - service: docker
+      - pkg: jupyterhub-pkgs
+      - cmd: jupyterhub-selinux
     - source: {{ zz.salt_url }}{{ zz.service_base }}
     - template: jinja
     - user: root
@@ -60,9 +79,9 @@ jupyterhub-image:
     - template: jinja
     # So script output is shown (it always succeeds)
     - stateful: True
-    - args: "jupyterhub:{{ pillar.pykern_pkconfig_channel }}"
+    - args: "{{ zz.docker_image }}"
     - unless:
-      - test -n "$(docker images -q jupyterhub:{{ pillar.pykern_pkconfig_channel }})"
+      - test -n "$(docker images -q {{ zz.docker_image }})"
     - require:
       - service: docker
 
