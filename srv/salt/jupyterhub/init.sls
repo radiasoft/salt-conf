@@ -97,29 +97,10 @@ jupyterhub:
       - file: {{ zz.systemd_service }}
       - cmd: jupyterhub-image
 
-#cat > /etc/sysctl.d/40-bivio-shm.conf <<'EOF'
-# Controls the maximum size of a message, in bytes
-#kernel.msgmnb = 65536
-
-# Controls the default maxmimum size of a message queue
-#kernel.msgmax = 65536
-
-# Controls the maximum shared segment size, in bytes
-# 1TB should be enough for any machine we own
-#kernel.shmmax = 1099511627776
-
-# Controls the maximum number of shared memory segments, in pages
-# (4x shmmax / getconf PAGESIZE [4096])
-#kernel.shmall = 1073741824
-#EOF
-
-# https://github.com/docker/docker/issues/4213#issuecomment-89316474
-# allow docker access of nfs volumes
-#setsebool -P virt_use_nfs on
-#setsebool -P virt_sandbox_use_nfs on
-#echo apa14b.bivio.biz > /etc/hostname
-#chcon -Rt svirt_sandbox_file_t /home/vagrant
-#mkdir -p /var/db/sirepo
-#chown vagrant:vagrant /var/db/sirepo
-#echo 'apa11b.bivio.biz:/var-on-zfs/db/sirepo /var/db/sirepo nfs nolock' >> /etc/fstab
-#mount -a
+# Stop and remove all instances of the jupyter-<name> when jupyterhub
+# is restarted. This is necessary, because the API tokens are dynamic.
+remove-jupyter-containers:
+  cmd.run:
+    - name: docker rm -f $(docker ps -q -f 'name=jupyter-')
+    - onchanges:
+        service: jupyterhub
