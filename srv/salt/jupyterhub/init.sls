@@ -111,7 +111,7 @@ remove-jupyter-containers:
     - name: docker rm -f $(docker ps -q -f 'name=jupyter-')
     - onchanges:
       - service: jupyterhub
-      - docker: radiasoft/beamsim-jupyter
+      - cmd: jupyter-image
     - onlyif:
       - test -n "$(docker ps -q -f 'name=jupyter-')"
 
