@@ -28,6 +28,7 @@ jupyterhub-pkgs:
 
 jupyterhub-selinux:
   cmd.script:
+#TODO(robnagler) Need docker daemon restart here for the changes to be seen
     - source: salt://jupyterhub/docker-selinux.sh
     - stateful: True
     - require:
@@ -104,3 +105,9 @@ remove-jupyter-containers:
     - name: docker rm -f $(docker ps -q -f 'name=jupyter-')
     - onchanges:
       - service: jupyterhub
+    - onlyif:
+      - test -n "$(docker ps -q -f 'name=jupyter-')"
+
+# need to manage docker pull of images for channel
+# always get latest?
+# maybe tag juypterhub also
