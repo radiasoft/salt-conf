@@ -86,9 +86,11 @@ jupyterhub-image:
     - require:
       - service: docker
 
-radiasoft/beamsim-jupyter:
-  docker.pulled:
-    - tag: {{ pillar.pykern_pkconfig_channel }}
+jupyter-image:
+  cmd.run:
+    - name: docker pull radiasoft/beamsim-jupyter:{{ pillar.pykern_pkconfig_channel }}
+    - unless:
+      - test -n "$(docker images -q radiasoft/beamsim-jupyter)"
 
 jupyterhub:
   service.running:
