@@ -13,4 +13,4 @@ c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
 c.DockerSpawner.use_internal_ip = True
 from jupyter_client.localinterfaces import public_ips
 c.JupyterHub.hub_ip = public_ips()[0]
-c.DockerSpawner.container_image = 'radiasoft/beamsim-jupyter'
+c.DockerSpawner.container_image = 'radiasoft/beamsim-jupyter:{{ pillar.pykern_pkconfig_channel }}'
