@@ -86,6 +86,10 @@ jupyterhub-image:
     - require:
       - service: docker
 
+radiasoft/beamsim-jupyter:
+  docker.pulled:
+    - tag: {{ pillar.pykern_pkconfig_channel }}
+
 jupyterhub:
   service.running:
     - enable: True
@@ -105,6 +109,7 @@ remove-jupyter-containers:
     - name: docker rm -f $(docker ps -q -f 'name=jupyter-')
     - onchanges:
       - service: jupyterhub
+      - docker: radiasoft/beamsim-jupyter
     - onlyif:
       - test -n "$(docker ps -q -f 'name=jupyter-')"
 

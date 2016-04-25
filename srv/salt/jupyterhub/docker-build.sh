@@ -18,6 +18,7 @@ tag=$base:$(date -u +%Y%m%d.%H%M%S)
     touch jupyterhub_config.py
     cat >> build <<'EOF'
 set -e
+pip install 'ipython[all]'
 pip install git+git://github.com/jupyterhub/oauthenticator.git
 pip install git+git://github.com/jupyterhub/dockerspawner.git
 rm -rf ~/.cache
