@@ -1,2 +1,2 @@
 #!/bin/bash
-printf '{changed:"yes", comment:"%s"}' $(hostname)
+printf '{"changed":"yes", "comment":"%s"}' $(hostname)
