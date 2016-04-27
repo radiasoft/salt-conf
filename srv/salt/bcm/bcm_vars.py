@@ -17,7 +17,7 @@ def main(argv):
 def _print_array(name, value, atype):
     print('declare -{} {}=('.format('A' if issubclass(atype, dict) else 'a', name))
     for k, v in value.items():
-        print("[{}]='{}'".format(k, v))
+        print("[{}]={}".format(k, v))
     print(');')
 
 
@@ -36,7 +36,7 @@ def _print_value(prefix, value):
             v = _scalar(v)
             if as_array is not None:
                 as_array[k] = v
-            print("{}='{}';".format(pk, v))
+            print("{}={};".format(pk, v))
     if as_array is not None:
         _print_array(prefix, as_array, type(value))
 
@@ -46,8 +46,8 @@ def _scalar(v):
         return '1' if v else ''
     elif v is None:
         return ''
-    # Might be a float or int so convert now
-    return str(v)
+    # Escape any single quotes
+    return "'" + str(v).replace("'", "'\"'\"'") + "'"
 
 
 def _value_salt(prefix):
