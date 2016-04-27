@@ -18,7 +18,7 @@ def _print_array(name, value, atype):
     print('declare -{} {}=('.format('A' if issubclass(atype, dict) else 'a', name))
     for k, v in value.items():
         print("[{}]='{}'".format(k, v))
-    print(')')
+    print(');')
 
 
 def _print_value(prefix, value):
@@ -36,7 +36,7 @@ def _print_value(prefix, value):
             v = _scalar(v)
             if as_array is not None:
                 as_array[k] = v
-            print("{}='{}'".format(pk, v))
+            print("{}='{}';".format(pk, v))
     if as_array is not None:
         _print_array(prefix, as_array, type(value))
 
