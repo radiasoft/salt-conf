@@ -5,5 +5,5 @@
     - file_mode: 500
     - clean: True
   cmd.run:
-    - name: /var/lib/bcm/run.sh
+    - name: /var/lib/bcm/bcm.sh
     - stateful: True
