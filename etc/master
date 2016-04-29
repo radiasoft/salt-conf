@@ -20,3 +20,5 @@ user: vagrant
 reactor:
   - 'minion_start':
     - /srv/reactor/sync-all.sls
+hash_type: sha256
+max_open_files: 4096
