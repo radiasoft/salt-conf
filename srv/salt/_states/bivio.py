@@ -1,80 +1,62 @@
-import tempfile
 import contextlib
+import datetime
 import logging
 import os
-import salt.utils
 import os.path
+import salt.utils
+import tempfile
+import yaml
 
-log = logging.getLogger(__name__)
+_initialized = False
 
+'''
+def docker_update():
+    update and restart
+    restart all containers
+    need to know what order though
+    containers
 
-def plain_file()
-    name is same as dest
-    pull from salt
-    only one template(?)
-    pillar.{{ id }}.source or same as name
+def pkg_update():
+    need to udpate all known packages and reboot
 
+'''
 
-def t1(**kwargs):
-    log.debug(str(kwargs))
-    #log.debug(__salt__.keys())
-    #log.debug(__pillar__.keys())
-    #log.debug(__grains__.keys())
-    #log.debug(__pillar__['channel'])
-    log.debug(str(globals().keys()))
-    for f in '__low__', '__lowstate__', '__opts__', '__env__', '__context__':
-        log.debug(f + '=' + str(globals()[f]))
-    ret = __states__['file.managed'](
-        name='/tmp/t1.service',
-        source='salt://t1.service',
-        context=dict(hello='bye2'),
-        template='jinja',
+def mod_init():
+    if _initialized:
+        return
+    global _initialized, _inventory, _log
+    _initialized = True
+    _log = logging.getLogger(__name__)
+    now = datetime.utcnow()
+    _inventory = _pillar('inventory').format(
+        now=now.strftime('%Y%m%d%H%M%S'),
     )
-    if not ret['result']:
-        log.debug('xxx' + str(ret))
-        return ret
-    log.debug('yyy' + str(ret))
-    return {
-        'name': kwargs['name'],
-        'changes': {
-            'this': {'old': '1', 'new': '2'},
-            '/tmp/t1.service': ret['changes'],
-        },
-        'result': True,
-        'comment': ret['comment'],
-    }
+    # The _inv() call in _call_state() happens after the
+    # call to the state so it's safe to do this. This
+    # handles the makedirs properly
+    ret = _ret_init({'name': 'mod_init'})
+    _call_state('plain_file', {'name': _inventory, 'contents': ''}, ret)
+    assert ret['result'], 'FAIL: ' + str(ret)
+    _inv({'start': now})
 
 
-_SYSTEMD_UNIT = """
-[Unit]
-Description={{ zz.name }}
-Requires={{ zz.require }}
-After={{ zz.require }}
+def plain_file(**kwargs):
+    if not ('contents', 'source', 'text') in kwargs:
+        kwargs['source'] = _pillar('source').format(kwargs)
+    if 'zz' in kwargs:
+        kwargs['context'] = {'zz': kwargs['zz']}
+    for k, v in _pillar('defaults').iteritems():
+        kwargs.setdefault(k, v)
+    op = 'managed'
+    if kwargs.get('append', False):
+        op = 'append'
+        kwargs['text'] = kwargs['contents']
+    ret = _ret_init(kwargs)
+    _call_state('file.' + op, kwargs, ret)
+    return ret
 
-[Service]
-Restart=on-failure
-RestartSec=10
-# The :Z sets the selinux context to the appropriate Multi-Category Security (MCS)
-# http://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
-ExecStart=/usr/bin/docker run -t --rm{{ zz.args }}
-ExecStop=-/usr/bin/docker stop -t 2 {{ zz.name }}
 
-[Install]
-WantedBy=multi-user.target
-"""
-
-def docker_container(
-        name,
-        image,
-        links=None,
-        volumes=None,
-        user='vagrant',
-        guest_user=None,
-        dockersock=False,
-        ports=None,
-        after=None,
-        cmd=None,
-    ):
+def docker_container(**kwargs):
     """Initiate a docker container as a systemd service.
 
     # globally unique name
@@ -88,7 +70,7 @@ jupyterhub:
     - ports: [ 5692:8000 ]
     - cmd: jupyterhub -f {{ zz.guest_config }}
     - requires: [ postgres jupyter_singleuser jupyter_config ]
-    """
+    every object needs to be logged somewhere
     write container to a file (dependencies natural)
         so can know what to restart
     there has to be a state file which contains
@@ -100,123 +82,160 @@ jupyterhub:
        on changes to docker images
        docker images would need to know if we should quiesce
        the entire system
-    dockersock = salt.utils.is_true(dockersock)
+    dockersock = dockersock
     zz = {}
-    require = _require_services()
-    try:
-        #docker_image(image)
-        args = '--name ' + name
-        guest_user = user
-        if guest_user:
-            args += ' -u ' + guest_user
-        for v in volumes || []:
-            if not exist v[0] :
-                _mkdir(v[0], docker.user)
-            args += ' -v ' + v + ':Z'
+    do we know??
+    """
+    ret = _ret_init(kwargs)
+    #docker_image(image)
+    args = '--name ' + kwargs['name']
+    user = kwargs.get('user', _pillar('user'))
+    if user:
+        args += ' -u ' + user
+    if 'bivio.docker_sock_semodule' in _require():
+        volumes += [_pillar('docker_sock'), _pillar('docker_sock')]
+    #TODO: support scalar
+    for v in kwargs.get('volumes', []):
+        # TODO: mkdir
+        s = ' -v ' + ':'.join(v)
+        if not v[0] == _pillar('docker_sock'):
+            s += ':Z'
+        args += s
+    for p in kwargs.get('ports', []):
+        args += ' -p ' + ':'.join(p)
+    for l in kwargs.get('links', []):
+        args += ' --link ' + ':'.join(l)
+    args += ' ' + kwargs['image']
+    cmd = kwargs.get('cmd')
+    if cmd:
+        args += ' ' + cmd
+    kwargs['args'] = args
+    after = [s + '.service' for s in kwargs.get('after', [])]
+    kwargs['after'] = ' '.join(after + ['docker.service'])
+    fn = _pillar('systemd.filename').format(kwargs)
+    if not _call_state(
+        'plain_file',
+        {
+            'name': fn,
+            'contents': _pillar('systemd.contents'),
+            'zz': kwargs,
+        },
+        ret,
+    ):
+        return ret
+    if ret['changed']:
+        _sh('systemctl daemon-reload', ret)
+        _sh('systemctl enable ' + kwargs['name'], ret)
+        _sh('systemctl stop ' + name, ret, ignore_errors=True)
+        _sh('systemctl start ' + name, ret)
+    return ret
 
-        if dockersock:
-            _selinux_dockersock()
-            args += ' -v /run/docker.sock:/run/docker.sock'
-        for p in ports || []:
-            args += ' -p ' + p
-        for l in links || []:
-            args += ' --link ' + l
-        args += ' ' + image
-        if cmd:
-            args += ' ' + cmd
-        after += (' ' if after else '') + 'docker.service'
-        fn = '/etc/systemd/system/{}.service'.format(name)
-        ret = _install_jinja(name=fn, content=_SYSTEMD_UNIT, zz)
-        if ret['changed']:
-            if __opts__['test']:
-                ret['comment'] += '; would have restarted {}'.format(name)
-                return
-            _sh('systemctl daemon-reload')
-            _sh('systemctl enable ' + name)
-            _sh('systemctl stop ' + name, True)
-            _sh('systemctl start ' + name)
-            # UNDO: systemctl stop {name}
-            # UNDO: systemctl disable {name}
-        # UNDO: rm -f {fn}
-    except _ErrorReturn as e:
-        return e.ret
+def pkg_installed(**kwargs):
+    ret = _ret_init(kwargs)
+    _call_state('pkg.installed', kwargs, ret)
+    return ret
+
 
 def docker_image(name, image, version):
-    if
     pass
 
 
-class _ErrorReturn(Exception):
-    def __init__(self, ret=None, **kwargs):
-        if not ret:
-            ret = dict(kwargs)
-            assert name in ret
-            if changed not in ret:
-                ret['changed'] = {}
-            if comment not in ret:
-                ret['comment'] = ''
-        # Always
-        ret.result = False
-        self.ret = ret
-
-    def __str__(self):
-        return '_ErrorReturn' + repr(self.value)
-
-def _cache_state(what):
-    try:
-        with salt.utils.flopen(fn_, 'w+') as fp_:
-            fp_.write('')
-    return os.path.join(__opts__['cachedir'], 'pkg_refresh')
+def docker_sock_semodule(**kwargs):
+    ret = _ret_init(kwargs)
+    modules = _sh('semodule -l', ret)
+    if modules is None or _pillar('name') in modules:
+        return ret
+    with _temp_dir() as d:
+        _call_state(
+            'plain_file',
+            {
+                'name': os.path.join(d, 'z.te'),
+                'contents': _pillar('contents'),
+            },
+            ret,
+        )
+        _sh('checkmodule -M -m z.te -o z.mod', ret)
+        _sh('semodule_package -m z.mod -o z.pp', ret)
+        _sh('semodule -i z.pp', ret)
 
 
-
-def _install_jinja(**kwargs):
-    del kwargs['zz']
-    ret = __states__['file.managed'](
-        template='jinja',
-        context={'zz': kwargs['zz']},
-        **kwargs,
-    )
-    log.debug('_install_jinja: ', str(ret))
+def _call_state(state, kwargs, ret):
     if not ret['result']:
-        raise _ErrorReturn(ret)
+        return None
+    if not '.' in state:
+        state = 'bivio.' + state
+    kwargs['name'] = state
+    new = __states__[state](**kwargs)
+    if new['changes']:
+        if ('old', 'new') in new['changes']:
+            ret[kwargs['name']] = new['changes']
+        else:
+            ret.update(new['changes'])
+    if new['comment']:
+        ret['comment'] += new['comment']
+        if not ret['comment'].endswith('\n'):
+            ret['comment'] += '\n'
+    if not new['result']:
+        ret['result'] = False
+        return False
+    _inv(kwargs)
+    return True
 
 
-def _selinux_dockersock():
-    if 'bivio_dockersock' in _sh('semodule -l'):
-        return
-    #UNDO: semodule -r bivio_dockersock
-    with _temp_dir():
-        with open('bivio_dockersock.te', 'w') as f:
-            f.write("""
-module bivio_dockersock 1.0;
-require {
-    type docker_var_run_t;
-    type docker_t;
-    type svirt_lxc_net_t;
-    class sock_file write;
-    class unix_stream_socket connectto;
-}
-allow svirt_lxc_net_t docker_t:unix_stream_socket connectto;
-allow svirt_lxc_net_t docker_var_run_t:sock_file write;
-"""
-        _sh('checkmodule -M -m bivio_dockersock.te -o bivio_dockersock.mod')
-        _sh('semodule_package -m bivio_dockersock.mod -o bivio_dockersock.pp')
-        _sh('semodule -i bivio_dockersock.pp')
+def _caller():
+    return inspect.currentframe().f_back.f_back.f_code.co_name
 
 
-def _sh(cmd, ignore_errors=False):
+def _debug(fmt, **kwargs):
+    _log.debug(fmt, kwargs)
+
+
+def _inv(kwargs):
+    what['fun'] = _caller()
+    what['low'] = __lowstate__
+    with salt.utils.flopen(_inventory, 'a') as f:
+        f.write(
+            yaml.dump([what], default_flow_style=False, indent=2) + '\n',
+        )
+
+
+def _pillar(key):
+    res = __pillar__['bivio.' + _caller() + '.' + key]
+    if __grains__.uid != 0 and res.startswith('/'):
+        return pwd + res
+
+
+def _require():
+    if not 'require' in __lowstate__:
+        return []
+    return __lowstate__['require'] or []
+
+
+def _ret_init(kwargs):
+    return {
+        'result': True,
+        'changes': {},
+        'name': kwargs['name'],
+        'comment': '',
+    }
+
+
+def _sh(cmd, ret, ignore_errors=False):
+    if not ret['result']:
+        return None
     try:
-        return subprocess.check_ouput(
+        return subprocess.check_output(
             cmd,
             shell=True,
             stderr=subprocess.STDOUT,
         )
     except Exception as e:
         if ignore_errors:
-            return
-        raise _ErrorReturn(name=str(cmd), comment='ERROR: {}'.format(e))
-
+            return None
+        raise _ErrorReturn(name=str(cmd), comment=''.format(e))
+        ret['result'] = False
+        ret['comment'] += '{}: ERROR {}'.format(cmd, e)
+        return None
 
 @contextlib.contextmanager
 def _temp_dir():
@@ -238,9 +257,3 @@ def _temp_dir():
             except Exception:
                 pass
         os.chdir(prev_d)
-
-def docker_update():
-    update and restart
-    restart all containers
-    need to know what order though
-    containers

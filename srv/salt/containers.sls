@@ -7,16 +7,20 @@ postgresql:
 # channel is implicit -- machine is always on one channel
     - image: radiasoft/postgresql
     - volumes:
-        - [ /var/lib/postgresql /var/lib/postgresql ]
-        - [ /var/lib/postgresql/run /run/postgresql ]
+      - [ /var/lib/postgresql /var/lib/postgresql ]
+      - [ /var/lib/postgresql/run /run/postgresql ]
     - init:
-        env:
-          - [ POSTGRES_PASSWORD {{ postgresql.pass }} ]
-          - [ JPY_PSQL_PASSWORD {{ jupyterhub.db_pass }} ]
-        user: None
-        sentinel: /var/lib/postgresql/data/PG_VERSION
+      env:
+        - [ POSTGRES_PASSWORD {{ postgresql.pass }} ]
+        - [ JPY_PSQL_PASSWORD {{ jupyterhub.db_pass }} ]
+      user: None
+      sentinel: /var/lib/postgresql/data/PG_VERSION
     - user: postgres
-    - ports: [ 5432 ]
+    - ports:
+      - [ 5432 5432 ]
+
+docker_sock_semodule:
+  bivio.docker_sock_semodule: []
 
 
 jupyter_singleuser:
@@ -35,14 +39,17 @@ jupyterhub:
     - image: radiasoft/jupyterhub
     - links:
         - postgresql
+    - run_d: /var/lib/jupyterhub/conf
     - volumes:
         - [ /var/lib/jupyterhub/conf /srv/jupyterhub/conf ]
     - user: root
-    - dockersock: True
     - ports:
         - [ 5692 8000 ]
     - cmd: jupyterhub -f /srv/jupyterhub/conf/jupyter_config.py
-    - require:
+    - after:
         - postgresql
-        - jupyter_singleuser
-        - jupyterhub_config
+    - require:
+        - bivio.postgresql
+        - bivio.jupyter_singleuser
+        - bivio.jupyterhub_config
+        - bivio.docker_sock_semodule
