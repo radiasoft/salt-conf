@@ -8,6 +8,13 @@ import os.path
 log = logging.getLogger(__name__)
 
 
+def plain_file()
+    name is same as dest
+    pull from salt
+    only one template(?)
+    pillar.{{ id }}.source or same as name
+
+
 def t1(**kwargs):
     log.debug(str(kwargs))
     #log.debug(__salt__.keys())
@@ -61,7 +68,8 @@ def docker_container(
         image,
         links=None,
         volumes=None,
-        user=None,
+        user='vagrant',
+        guest_user=None,
         dockersock=False,
         ports=None,
         after=None,
@@ -75,22 +83,37 @@ jupyterhub:
     - name: "radiasoft/jupyterhub:{{ pillar.channel }}"
     - links: [ postgres:postgres ]
     - volumes: [ {{ zz.host_conf.d }}:{{ zz.guest_conf.d }} ]
-    - user: root
+    - gueset_user: root
     - dockersock: True
     - ports: [ 5692:8000 ]
     - cmd: jupyterhub -f {{ zz.guest_config }}
     - requires: [ postgres jupyter_singleuser jupyter_config ]
     """
+    write container to a file (dependencies natural)
+        so can know what to restart
+    there has to be a state file which contains
+       the order of the startup states
+       all states run and recreate the state
+       with the ability to undo.
+       a software update would look at that state
+       and decide which services needed to be restarted based
+       on changes to docker images
+       docker images would need to know if we should quiesce
+       the entire system
     dockersock = salt.utils.is_true(dockersock)
     zz = {}
     require = _require_services()
     try:
         #docker_image(image)
         args = '--name ' + name
-        if user:
-            args += ' -u ' + user
+        guest_user = user
+        if guest_user:
+            args += ' -u ' + guest_user
         for v in volumes || []:
+            if not exist v[0] :
+                _mkdir(v[0], docker.user)
             args += ' -v ' + v + ':Z'
+
         if dockersock:
             _selinux_dockersock()
             args += ' -v /run/docker.sock:/run/docker.sock'
@@ -215,3 +238,9 @@ def _temp_dir():
             except Exception:
                 pass
         os.chdir(prev_d)
+
+def docker_update():
+    update and restart
+    restart all containers
+    need to know what order though
+    containers
