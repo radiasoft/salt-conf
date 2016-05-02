@@ -9,15 +9,15 @@ postgresql:
     - volumes:
       - [ /var/lib/postgresql /var/lib/postgresql ]
       - [ /var/lib/postgresql/run /run/postgresql ]
+    - user: postgres
+    - ports:
+      - [ 5432 5432 ]
     - init:
       env:
         - [ POSTGRES_PASSWORD {{ postgresql.pass }} ]
         - [ JPY_PSQL_PASSWORD {{ jupyterhub.db_pass }} ]
       user: None
       sentinel: /var/lib/postgresql/data/PG_VERSION
-    - user: postgres
-    - ports:
-      - [ 5432 5432 ]
 
 docker_sock_semodule:
   bivio.docker_sock_semodule: []
@@ -39,7 +39,7 @@ jupyterhub:
     - image: radiasoft/jupyterhub
     - links:
         - postgresql
-    - run_d: /var/lib/jupyterhub/conf
+    - docker_sock: True
     - volumes:
         - [ /var/lib/jupyterhub/conf /srv/jupyterhub/conf ]
     - user: root

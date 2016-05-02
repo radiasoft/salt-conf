@@ -24,6 +24,7 @@ def pkg_update():
 def mod_init():
     if _initialized:
         return
+    assert not __opts__['test'], 'test mode not supported'
     global _initialized, _inventory, _log
     _initialized = True
     _log = logging.getLogger(__name__)
@@ -92,19 +93,22 @@ jupyterhub:
     user = kwargs.get('user', _pillar('user'))
     if user:
         args += ' -u ' + user
-    if 'bivio.docker_sock_semodule' in _require():
-        volumes += [_pillar('docker_sock'), _pillar('docker_sock')]
     #TODO: support scalar
     for v in kwargs.get('volumes', []):
-        # TODO: mkdir
-        s = ' -v ' + ':'.join(v)
+        # TODO: mkdir???
+        # TODO: quote arg
+        s = ' -v ' + ':'.join(v) + ':Z'
         if not v[0] == _pillar('docker_sock'):
             s += ':Z'
         args += s
+    if kwargs.get('docker_sock', False):
+        args += ' -v ' + _pillar('docker_sock')
     for p in kwargs.get('ports', []):
         args += ' -p ' + ':'.join(p)
     for l in kwargs.get('links', []):
         args += ' --link ' + ':'.join(l)
+    for e in kwargs.get('env', []):
+        args += " -e '" + '='.join(e) + "'"
     args += ' ' + kwargs['image']
     cmd = kwargs.get('cmd')
     if cmd:
