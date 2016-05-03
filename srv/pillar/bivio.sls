@@ -1,7 +1,7 @@
 {% raw %}
 bivio:
   mod_init:
-    inventory: '/var/lib/bivio-salt/inventory/{now}.yml',
+    inventory: '/var/lib/bivio-salt/inventory/{now}.yml'
 
   dockersock:
     policy: dockersock
@@ -44,7 +44,7 @@ bivio:
       allow svirt_lxc_net_t docker_var_run_t:sock_file write;
 
   plain_file:
-    source: salt://./{name}
+    source: 'salt://./{name}'
     defaults:
       dir_mode: "750"
       group: {{ grains.username }}
