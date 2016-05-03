@@ -1,38 +1,34 @@
-postgresql_image:
+postgres_image:
   bivio.docker_image:
-    - image: radiasoft/postgresql
+    - image: radiasoft/postgres
 
 postgresql:
   bivio.docker_container:
 # channel is implicit -- machine is always on one channel
-    - image: radiasoft/postgresql
+    - image: radiasoft/postgres
     - volumes:
-      - [ /var/lib/postgresql /var/lib/postgresql ]
+      - [ /var/lib/postgresql/data /var/lib/postgresql/data ]
       - [ /var/lib/postgresql/run /run/postgresql ]
     - user: postgres
     - ports:
       - [ 5432 5432 ]
     - init:
       env:
-        - [ POSTGRES_PASSWORD {{ postgresql.pass }} ]
+        - [ POSTGRES_PASSWORD {{ postgres.admin_pass }} ]
         - [ JPY_PSQL_PASSWORD {{ jupyterhub.db_pass }} ]
-      user: None
       sentinel: /var/lib/postgresql/data/PG_VERSION
 
 docker_sock_semodule:
   bivio.docker_sock_semodule: []
 
-
 jupyter_singleuser:
   bivio.docker_image:
     - name: radiasoft/jupyter-singleuser
-
 
 jupyterhub_config:
   bivio.plain_file:
     - name: /var/lib/jupyterhub/conf/jupyterhub_config.py
     - user: {{ pillar.docker_user }}
-
 
 jupyterhub:
   bivio.docker_container:
