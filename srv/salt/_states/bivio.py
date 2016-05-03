@@ -5,6 +5,7 @@ import logging
 import os
 import os.path
 import salt.utils
+import subprocess
 import tempfile
 import time
 import yaml
@@ -39,9 +40,9 @@ def mod_init(low):
     # call to the state so it's safe to do this. This
     # handles the makedirs properly
     ret = _ret_init({'name': 'mod_init'})
-    _inventory = _pillar('source').format(name=_inventory)
-    d = os.path.dirname(_inventory))
-    if not os.exists(d):
+    _inventory = _pillar('inventory').format(now=_inventory)
+    d = os.path.dirname(_inventory)
+    if not os.path.exists(d):
         os.makedirs(d)
     with salt.utils.flopen(_inventory, 'w') as f:
         f.write('')
@@ -50,7 +51,6 @@ def mod_init(low):
 
 
 def plain_file(**kwargs):
-    _debug(kwargs)
     if not _any(('contents', 'source', 'text'), kwargs):
         kwargs['source'] = _pillar('source').format(kwargs)
     if 'zz' in kwargs:
@@ -136,7 +136,7 @@ jupyterhub:
         ret,
     ):
         return ret
-    if ret['changed']:
+    if ret['changes']:
         _sh('systemctl daemon-reload', ret)
         _sh('systemctl enable ' + kwargs['name'], ret)
         _sh('systemctl stop ' + name, ret, ignore_errors=True)
@@ -150,13 +150,17 @@ def pkg_installed(**kwargs):
     return ret
 
 
-def docker_image(name, image, version):
-    return {
-        'changed': {},
-        'comment': '',
-        'name': 'docker_image',
-        'result': True,
-    }
+def docker_image(**kwargs):
+    ret = _ret_init(kwargs)
+    i = kwargs['image'] + ':' + __pillar__['channel']
+    res = _sh("docker images -q '{}'".format(i), ret)
+    if res is None:
+        return ret
+    if len(res) == 0:
+        _sh("docker pull '{}'".format(i), ret)
+    else:
+        ret['comment'] += 'image {} already pulled'.format(i)
+    return ret
 
 
 def docker_sock_semodule(**kwargs):
@@ -186,8 +190,7 @@ def _call_state(state, kwargs, ret):
     if not ret['result']:
         return None
     if not '.' in state:
-        state = 'bivio.' + state
-    kwargs['name'] = state
+        state = __name__ + '.' + state
     new = __states__[state](**kwargs)
     if new['changes']:
         if _any(('old', 'new'), new['changes']):
@@ -211,24 +214,26 @@ def _caller():
 
 def _debug(fmt, *args, **kwargs):
     if not isinstance(fmt, str):
+        fmt = '{}'
         args = [fmt]
-        fmt = '%s'
-    _log.debug(fmt, *args, **kwargs)
+    s = ('{}.{}: ' + fmt).format(__name__, _caller(), *args, **kwargs)
+    _log.debug('%s', s)
 
 
 def _inv(kwargs):
-    what['fun'] = _caller()
-    what['low'] = __lowstate__
+    kwargs['fun'] = _caller()
+    kwargs['low'] = __lowstate__
     with salt.utils.flopen(_inventory, 'a') as f:
         f.write(
-            yaml.dump([what], default_flow_style=False, indent=2) + '\n',
+            yaml.dump([kwargs], default_flow_style=False, indent=2) + '\n',
         )
 
 
 def _pillar(key):
     res = __pillar__['bivio'][_caller()][key]
-    if isinstance(res, str) and __grains__['uid'] != 0 and res.startswith('/'):
-        return os.path.join(os.getcwd, res)
+    if isinstance(res, str) and __grains__['uid'] != 0 and os.path.isabs(res):
+        # os.path.join doesn't work b/c res isabs
+        return os.getcwd() + res
     return res
 
 
@@ -250,19 +255,33 @@ def _ret_init(kwargs):
 def _sh(cmd, ret, ignore_errors=False):
     if not ret['result']:
         return None
+    out = None
+    err = None
+    e2 = None
     try:
-        return subprocess.check_output(
+        _debug(cmd)
+        p = subprocess.Popen(
             cmd,
             shell=True,
-            stderr=subprocess.STDOUT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
+        out, err = p.communicate()
+        p.wait()
     except Exception as e:
+        e2 = e
+        if err is None:
+            err = str(e2)
+        else:
+            err += '\n' + e2
+    if e2 or p.returncode != 0:
         if ignore_errors:
             return None
-        raise _ErrorReturn(name=str(cmd), comment=''.format(e))
         ret['result'] = False
-        ret['comment'] += '{}: ERROR {}'.format(cmd, e)
+        ret['comment'] += '{}: ERROR={} stdout={} stderr={}'.format(
+            cmd, e2 or p.returncode, out, err)
         return None
+    return out
 
 @contextlib.contextmanager
 def _temp_dir():
