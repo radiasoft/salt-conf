@@ -1,10 +1,12 @@
 import contextlib
 import datetime
+import inspect
 import logging
 import os
 import os.path
 import salt.utils
 import tempfile
+import time
 import yaml
 
 _initialized = False
@@ -21,14 +23,15 @@ def pkg_update():
 
 '''
 
-def mod_init():
+def mod_init(low):
+    global _initialized
     if _initialized:
-        return
+        return True
     assert not __opts__['test'], 'test mode not supported'
-    global _initialized, _inventory, _log
+    global _inventory, _log
     _initialized = True
     _log = logging.getLogger(__name__)
-    now = datetime.utcnow()
+    now = datetime.datetime.utcnow()
     _inventory = _pillar('inventory').format(
         now=now.strftime('%Y%m%d%H%M%S'),
     )
@@ -36,13 +39,19 @@ def mod_init():
     # call to the state so it's safe to do this. This
     # handles the makedirs properly
     ret = _ret_init({'name': 'mod_init'})
-    _call_state('plain_file', {'name': _inventory, 'contents': ''}, ret)
-    assert ret['result'], 'FAIL: ' + str(ret)
-    _inv({'start': now})
+    _inventory = _pillar('source').format(name=_inventory)
+    d = os.path.dirname(_inventory))
+    if not os.exists(d):
+        os.makedirs(d)
+    with salt.utils.flopen(_inventory, 'w') as f:
+        f.write('')
+    #_inv({'start': now})
+    return True
 
 
 def plain_file(**kwargs):
-    if not ('contents', 'source', 'text') in kwargs:
+    _debug(kwargs)
+    if not _any(('contents', 'source', 'text'), kwargs):
         kwargs['source'] = _pillar('source').format(kwargs)
     if 'zz' in kwargs:
         kwargs['context'] = {'zz': kwargs['zz']}
@@ -134,6 +143,7 @@ jupyterhub:
         _sh('systemctl start ' + name, ret)
     return ret
 
+
 def pkg_installed(**kwargs):
     ret = _ret_init(kwargs)
     _call_state('pkg.installed', kwargs, ret)
@@ -141,7 +151,12 @@ def pkg_installed(**kwargs):
 
 
 def docker_image(name, image, version):
-    pass
+    return {
+        'changed': {},
+        'comment': '',
+        'name': 'docker_image',
+        'result': True,
+    }
 
 
 def docker_sock_semodule(**kwargs):
@@ -163,6 +178,10 @@ def docker_sock_semodule(**kwargs):
         _sh('semodule -i z.pp', ret)
 
 
+def _any(items, obj):
+    return any(k in obj for k in items)
+
+
 def _call_state(state, kwargs, ret):
     if not ret['result']:
         return None
@@ -171,7 +190,7 @@ def _call_state(state, kwargs, ret):
     kwargs['name'] = state
     new = __states__[state](**kwargs)
     if new['changes']:
-        if ('old', 'new') in new['changes']:
+        if _any(('old', 'new'), new['changes']):
             ret[kwargs['name']] = new['changes']
         else:
             ret.update(new['changes'])
@@ -190,8 +209,11 @@ def _caller():
     return inspect.currentframe().f_back.f_back.f_code.co_name
 
 
-def _debug(fmt, **kwargs):
-    _log.debug(fmt, kwargs)
+def _debug(fmt, *args, **kwargs):
+    if not isinstance(fmt, str):
+        args = [fmt]
+        fmt = '%s'
+    _log.debug(fmt, *args, **kwargs)
 
 
 def _inv(kwargs):
@@ -204,9 +226,10 @@ def _inv(kwargs):
 
 
 def _pillar(key):
-    res = __pillar__['bivio.' + _caller() + '.' + key]
-    if __grains__.uid != 0 and res.startswith('/'):
-        return pwd + res
+    res = __pillar__['bivio'][_caller()][key]
+    if isinstance(res, str) and __grains__['uid'] != 0 and res.startswith('/'):
+        return os.path.join(os.getcwd, res)
+    return res
 
 
 def _require():
