@@ -44,12 +44,12 @@ bivio:
       allow svirt_lxc_net_t docker_var_run_t:sock_file write;
 
   plain_file:
-    source: 'salt://./{name}'
+    source: "salt://./{name}"
     defaults:
       dir_mode: "750"
-      group: {{ grains.username }}
+      group: "{{ grains.username }}"
       makedirs: True
       mode: "440"
       template: jinja
-      user: {{ grains.username }}
+      user: "{{ grains.username }}"
 {% endraw %}
