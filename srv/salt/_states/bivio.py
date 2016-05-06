@@ -1,4 +1,5 @@
 import contextlib
+import copy
 import datetime
 import inspect
 import logging
@@ -73,28 +74,33 @@ jupyterhub:
 
 def docker_image(**kwargs):
     zz, ret = _state_init(kwargs)
+    _call_state('docker_service', {'name': 'docker'}, ret)
+    if not ret['result']:
+        return ret
     i = _assert_name(zz['name'] + ':' + __pillar__['channel'])
-    res = _sh('docker images -q ' + i, ret)
+    res = _sh('docker images', ret)
     if not ret['result']:
         return ret
     new = {}
-    if len(res) == 0:
+    # docker.io/foo/bar or foo/bar is the image so can't use a name to filter
+    pat = '(?:^|/)' + i.replace(':', r'\s+') + r'\s+'
+    if res and re.search(pat, res, flags=re.MULTILINE + re.IGNORECASE):
+        new['comment'] = 'image already pulled'
+    else:
         _sh('docker pull ' + i, ret)
         if not ret['result']:
             return ret
-        new['comment'] = i + ' was not local'
+        new['comment'] = 'image needed to be pulled'
         new['changes'] = {'new': 'pull image'}
-    else:
-        new['comment'] = i + ' already local'
     return _ret_merge(i, ret, new)
 
 
 def docker_service(**kwargs):
     zz, ret = _state_init(kwargs)
-    # Ignore incoming name as it doesn't matter for the rest
     zz['name'] = 'docker'
+    # Ignore incoming name as it doesn't matter for the rest
     if _service_status(zz)[0]:
-        return _ret_merge(zz, ret, {'comment': 'docker.service is running'})
+        return _ret_merge(zz, ret, {'comment': 'service is running'})
     _call_state('pkg_installed', {'name': 'docker'}, ret)
     _call_state('pkg_installed', {'name': 'lvm2'}, ret)
     if not ret['result']:
@@ -108,7 +114,7 @@ def docker_service(**kwargs):
 
 
 def docker_sock_semodule(**kwargs):
-    ret = _ret_init(kwargs)
+    zz, ret = _state_init(kwargs)
     modules = _sh('semodule -l', ret)
     if modules is None or _pillar('name') in modules:
         return ret
@@ -124,10 +130,14 @@ def docker_sock_semodule(**kwargs):
         _sh('checkmodule -M -m z.te -o z.mod', ret)
         _sh('semodule_package -m z.mod -o z.pp', ret)
         _sh('semodule -i z.pp', ret)
+    return ret
 
 
 def pkg_installed(**kwargs):
     ret = _ret_init(kwargs)
+    if _is_test():
+        # Can't acctually install
+        return ret
     _call_state('pkg.installed', kwargs, ret)
     return ret
 
@@ -141,10 +151,8 @@ def mod_init(low):
     _initialized = True
     ret = _ret_init({'name': 'mod_init'})
     _log = logging.getLogger(__name__)
-    now = datetime.datetime.utcnow()
-    _inventory = _pillar('inventory').format(
-        now=now.strftime('%Y%m%d%H%M%S'),
-    )
+    now = datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')
+    _inventory = _pillar('inventory').format(now=now)
     # The _inv() call in _call_state() happens after the
     # call to the state so it's safe to do this. This
     # handles the makedirs properly.
@@ -153,23 +161,24 @@ def mod_init(low):
         os.makedirs(d)
     with salt.utils.flopen(_inventory, 'w') as f:
         f.write('')
-    #_inv({'start': now})
+    _inv({'start': now})
     return True
 
 
 def plain_file(**kwargs):
-    if not _any(('contents', 'source', 'text'), kwargs):
-        kwargs['source'] = _pillar('source').format(kwargs)
-    if 'zz' in kwargs:
-        kwargs['context'] = {'zz': kwargs['zz']}
+    zz, ret = _state_init(kwargs)
+    if not _any(('contents', 'source', 'text'), zz):
+        zz['source'] = _pillar('source').format(**zz)
+    if 'zz' in zz:
+        zz['context'] = {'zz': zz['zz']}
     for k, v in _pillar('defaults').iteritems():
-        kwargs.setdefault(k, v)
+        zz.setdefault(k, v)
     op = 'managed'
-    if kwargs.get('append', False):
+    if zz.get('append', False):
         op = 'append'
-        kwargs['text'] = kwargs['contents']
-    ret = _ret_init(kwargs)
-    _call_state('file.' + op, kwargs, ret)
+        zz['text'] = zz['contents']
+    ret = _ret_init(zz)
+    _call_state('file.' + op, zz, ret)
     return ret
 
 
@@ -182,7 +191,7 @@ def _assert_name(zz_or_name):
         name = zz_or_name
     else:
         if 'name' not in zz_or_name:
-            raise KeyError('{}: state kwargs missing name'.format(zz_or_name))
+            zz_or_name['name'] = __lowstate__['name']
         name = zz_or_name['name']
     if not re.search(_SHELL_SAFE_ARG, name):
         raise ValueError('{}: invalid name in kwargs'.format(name))
@@ -190,15 +199,17 @@ def _assert_name(zz_or_name):
 
 
 def _call_state(state, kwargs, ret):
-    if name not in kwargs:
-        kwargs['name'] = state
+    zz = copy.deepcopy(kwargs)
+    if 'name' not in zz:
+        zz['name'] = state
     if not ret['result']:
         return None
     if not '.' in state:
-        state = __name__ + '.' + state
-    new = __states__[state](**kwargs)
-    _inv(kwargs, new)
-    return _ret_merge(ret, kwargs['name'], new)
+        # not __name__
+        state = 'bivio' + '.' + state
+    new = __states__[state](**zz)
+    _inv(zz, new)
+    return _ret_merge(zz['name'], ret, new)
 
 
 def _caller():
@@ -209,14 +220,13 @@ def _debug(fmt, *args, **kwargs):
     if not isinstance(fmt, str):
         fmt = '{}'
         args = [fmt]
-    s = ('{}.{}: ' + fmt).format(__name__, _caller(), *args, **kwargs)
+    s = ('{}.{}: ' + fmt).format('bivio', _caller(), *args, **kwargs)
     _log.debug('%s', s)
 
 
 def _docker_container_args(kwargs):
     zz, ret = _state_init(kwargs)
     args = '--name ' + zz['name']
-    zz['service_name'] = zz['name'] + '.service'
     user = zz.get('user')
     if user:
         args += ' -u ' + user
@@ -247,25 +257,28 @@ def _docker_container_args(kwargs):
 
 
 def _inv(kwargs, ret=None):
-    res = copy.deepcopy(kwargs)
-    res['fun'] = _caller()
-    res['low'] = __lowstate__
+    zz = copy.deepcopy(kwargs)
+    zz['fun'] = _caller()
+    try:
+        zz['low'] = __lowstate__
+    except:
+        pass
     if ret:
-        res['ret'] = ret
+        zz['ret'] = ret
     with salt.utils.flopen(_inventory, 'a') as f:
         # Appending an array to YAML makes all entries a single array
         f.write(
-            yaml.dump([res], default_flow_style=False, indent=2) + '\n',
+            yaml.dump([zz], default_flow_style=False, indent=2) + '\n',
         )
 
 
-def _pillar(key):
-    res = __pillar__['bivio'][_caller()][key]
+def _is_test():
     #TODO@robnagler better definition of testing
-    if isinstance(res, str) and __grains__['uid'] != 0 and os.path.isabs(res):
-        # os.path.join doesn't work b/c it won't concatenate abs paths
-        return os.getcwd() + res
-    return res
+    return __grains__['uid'] != 0
+
+
+def _pillar(key):
+    return __pillar__['bivio'][_caller()][key]
 
 
 def _require():
@@ -284,6 +297,9 @@ def _ret_init(kwargs):
 
 
 def _ret_merge(name, ret, new):
+    if isinstance(name, dict):
+        name = name['name']
+    _debug('{} ret={}', name, new)
     if 'changes' in new and new['changes']:
         if _any(('old', 'new'), new['changes']):
             ret['changes'][name] = new['changes']
@@ -294,12 +310,17 @@ def _ret_merge(name, ret, new):
                 if not k in v:
                     v[k] = None
     if 'comment' in new and new['comment']:
-        ret['comment'] += 'name: ' + new['comment']
+        _debug('{}={}', name, new['comment'])
+        prefix = name + ': '
+        if new['comment'].startswith(prefix):
+            prefix = ''
+        ret['comment'] += prefix + new['comment']
         if not ret['comment'].endswith('\n'):
             ret['comment'] += '\n'
+        _debug('{} 2={}', name, ret['comment'])
     if 'result' in new and not new['result']:
         ret['result'] = False
-    return ret['result']
+    return ret
 
 
 def _service_restart(zz, ret):
@@ -308,40 +329,41 @@ def _service_restart(zz, ret):
     changes = []
     comment = []
     updated = bool(ret['changes'])
-    status = _service_status(zz)
+    ok, status = _service_status(zz)
     if updated:
         _sh('systemctl daemon-reload', ret)
         if not ret['result']:
             return ret
         changes.append('daemon-reload')
     for s, op in (('enabled', 'reenable'), ('active', 'restart')):
-        if updated or not status[s]:
-            _sh('systemctl {} {}'.format(op, zz['name']), ret)
-            if not ret['result']:
-                return ret
-            changes.append(op)
-            if not status[s]:
-                comment.append('{} was not {}'.format(zz['name'], s))
+        if not updated and status[s]:
+            continue
+        _sh('systemctl {} {}'.format(op, zz['name']), ret)
+        if not ret['result']:
+            return ret
+        changes.append(op)
+        if not status[s]:
+            comment.append('service was not {}'.format(s))
     if updated and not comment:
         comment.append('restarted')
     return _ret_merge(
-        n,
+        zz['name'],
         ret,
         {
-            'changes': {zz['service_name']: {'new': '; '.join(changes)}},
+            'changes': {zz['name']: {'new': '; '.join(changes)}},
             'comment': '; '.join('comment'),
         },
     )
 
 
-def _service_status(zz):
-    ignored = ret_init(zz)
-    res = {}
-    for k in 'active', 'enabled':
-        c = 'systemctl is-{} {}'.format(k, zz['service_name'])
+def _service_status(zz, which=('active', 'enabled')):
+    ignored = _ret_init(zz)
+    status = {}
+    for k in which:
+        c = 'systemctl is-{} {}'.format(k, zz['name'])
         out = _sh(c, ignored, ignore_errors=True)
-        res[k] = bool(re.search('^' + k + r'\b', out))
-    return service['active'] and service['enabled'], res
+        status[k] = bool(re.search('^' + k + r'\b', str(out)))
+    return status['active'] and status['enabled'], status
 
 
 def _sh(cmd, ret, ignore_errors=False):
@@ -367,10 +389,11 @@ def _sh(cmd, ret, ignore_errors=False):
             err = 'exit={}'.format(p.returncode)
     except Exception as e:
         err = str(e)
-    if not ignore_errors or err:
-        debug('err={}', err)
+    _debug('err={}', err)
+    if not ignore_errors and err:
         _ret_merge(
             name,
+            ret,
             {
                 'result': 'False',
                 'comment': 'ERROR={} stdout={} stderr={}'.format(
@@ -383,6 +406,7 @@ def _sh(cmd, ret, ignore_errors=False):
 
 
 def _state_init(kwargs):
+    _debug('low={}', __lowstate__)
     zz = copy.deepcopy(kwargs)
     _assert_name(zz)
     return zz, _ret_init(zz)
