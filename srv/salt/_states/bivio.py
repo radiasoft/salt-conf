@@ -68,18 +68,18 @@ jupyterhub:
         },
         ret,
     )
-    return _service_running(zz, ret)
+    return _service_restart(zz, ret)
 
 
 def docker_image(**kwargs):
     zz, ret = _state_init(kwargs)
-    i = zz['name'] + ':' + _assert_name(name=__pillar__['channel'])
-    res = _sh('docker images -q ' i, ret)
+    i = _assert_name(zz['name'] + ':' + __pillar__['channel'])
+    res = _sh('docker images -q ' + i, ret)
     if not ret['result']:
         return ret
     new = {}
     if len(res) == 0:
-        _sh("docker pull '{}'".format(i), ret)
+        _sh('docker pull ' + i, ret)
         if not ret['result']:
             return ret
         new['comment'] = i + ' was not local'
@@ -90,29 +90,21 @@ def docker_image(**kwargs):
 
 
 def docker_service(**kwargs):
-    ret = _ret_init(kwargs)
-    if _sh('systemctl status docker', ret, ignore_errors=True):
-        ret['comment'] = 'docker service is already running'
-        return ret
+    zz, ret = _state_init(kwargs)
+    # Ignore incoming name as it doesn't matter for the rest
+    zz['name'] = 'docker'
+    if _service_status(zz)[0]:
+        return _ret_merge(zz, ret, {'comment': 'docker.service is running'})
     _call_state('pkg_installed', {'name': 'docker'}, ret)
     _call_state('pkg_installed', {'name': 'lvm2'}, ret)
+    if not ret['result']:
+        return ret
     lvs = _sh('lvs', ret);
     # VirtualBox VMs don't have LVMs so we used the default loopback device
     # and don't need to setup storage
     if lvs and 'docker' not in lvs:
         _sh('docker-storage_setup', ret)
-    _sh('systemctl enable docker', ret)
-    _sh('systemctl start docker', ret)
-    for _ in xrange(3):
-        time.sleep(1)
-        if _sh('systemctl status docker', ret, ignore_errors=True):
-            ret['changes']['docker.service'] = {
-                'old': 'stopped',
-                'new': 'started',
-            }
-            ret['comment'] += '\n'
-            return ret
-    return ret
+    return _service_restart(zz, ret)
 
 
 def docker_sock_semodule(**kwargs):
@@ -185,11 +177,13 @@ def _any(items, obj):
     return any(k in obj for k in items)
 
 
-def _assert_name(zz=None, name=None):
-    if not name:
-        if 'name' not in zz:
-            raise KeyError('{}: state kwargs missing name'.format(zz))
-        name = zz['name']
+def _assert_name(zz_or_name):
+    if isinstance(zz_or_name, str):
+        name = zz_or_name
+    else:
+        if 'name' not in zz_or_name:
+            raise KeyError('{}: state kwargs missing name'.format(zz_or_name))
+        name = zz_or_name['name']
     if not re.search(_SHELL_SAFE_ARG, name):
         raise ValueError('{}: invalid name in kwargs'.format(name))
     return name
@@ -222,6 +216,7 @@ def _debug(fmt, *args, **kwargs):
 def _docker_container_args(kwargs):
     zz, ret = _state_init(kwargs)
     args = '--name ' + zz['name']
+    zz['service_name'] = zz['name'] + '.service'
     user = zz.get('user')
     if user:
         args += ' -u ' + user
@@ -231,8 +226,6 @@ def _docker_container_args(kwargs):
           # TODO: mkdir??? yes, be
         # TODO: quote arg
         s = ' -v ' + ':'.join(v) + ':Z'
-        if not v[0] == _pillar('docker_sock'):
-            s += ':Z'
         args += s
     if zz.get('docker_sock', False):
         x = _pillar('docker_sock')
@@ -250,7 +243,7 @@ def _docker_container_args(kwargs):
     zz['args'] = args
     after = [s + '.service' for s in zz.get('after', [])]
     zz['after'] = ' '.join(after + ['docker.service'])
-    return zz
+    return zz, ret
 
 
 def _inv(kwargs, ret=None):
@@ -298,7 +291,7 @@ def _ret_merge(name, ret, new):
             ret['changes'].update(new['changes'])
         for v in ret['changes'].values():
             for k in 'old', 'new':
-                if k not v:
+                if not k in v:
                     v[k] = None
     if 'comment' in new and new['comment']:
         ret['comment'] += 'name: ' + new['comment']
@@ -309,27 +302,27 @@ def _ret_merge(name, ret, new):
     return ret['result']
 
 
-def _service_running(zz, ret):
+def _service_restart(zz, ret):
     if not ret['result']:
         return ret
     changes = []
     comment = []
-    update = ret['result'] and ret['changes']
+    updated = bool(ret['changes'])
     status = _service_status(zz)
-    if update:
+    if updated:
         _sh('systemctl daemon-reload', ret)
         if not ret['result']:
             return ret
         changes.append('daemon-reload')
     for s, op in (('enabled', 'reenable'), ('active', 'restart')):
-        if update or not status[s]:
+        if updated or not status[s]:
             _sh('systemctl {} {}'.format(op, zz['name']), ret)
             if not ret['result']:
                 return ret
             changes.append(op)
             if not status[s]:
                 comment.append('{} was not {}'.format(zz['name'], s))
-    if update and not comment:
+    if updated and not comment:
         comment.append('restarted')
     return _ret_merge(
         n,
@@ -348,7 +341,7 @@ def _service_status(zz):
         c = 'systemctl is-{} {}'.format(k, zz['service_name'])
         out = _sh(c, ignored, ignore_errors=True)
         res[k] = bool(re.search('^' + k + r'\b', out))
-    return res
+    return service['active'] and service['enabled'], res
 
 
 def _sh(cmd, ret, ignore_errors=False):
@@ -385,7 +378,7 @@ def _sh(cmd, ret, ignore_errors=False):
             },
         )
         return None
-    _inv({'name': name, 'stdout': stdout, 'stderr', stderr})
+    _inv({'name': name, 'stdout': stdout, 'stderr': stderr})
     return None if err else stdout
 
 
