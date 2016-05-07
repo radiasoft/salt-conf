@@ -59,11 +59,11 @@ jupyterhub:
     do we know??
     """
     zz, ret = _docker_container_args(kwargs)
-    _call_state('docker_image', {'name', zz['name']}, ret)
+    _call_state('docker_image', {'name': zz['image']}, ret)
     _call_state(
         'plain_file',
         {
-            'name': _pillar('systemd.filename').format(zz),
+            'name': _pillar('systemd.filename').format(**zz),
             'contents': _pillar('systemd.contents'),
             'zz': zz,
         },
@@ -73,18 +73,20 @@ jupyterhub:
 
 
 def docker_image(**kwargs):
+    _debug('kwargs={}', kwargs)
     zz, ret = _state_init(kwargs)
     _call_state('docker_service', {'name': 'docker'}, ret)
     if not ret['result']:
         return ret
-    i = _assert_name(zz['name'] + ':' + __pillar__['channel'])
-    res = _sh('docker images', ret)
+    _debug('name={}', zz['name'])
+    i = zz['name']
+    if not ':' in i:
+        i += ':' + _assert_name(__pillar__['channel'])
+    exists, ret = _docker_image_exists(i, ret)
     if not ret['result']:
         return ret
     new = {}
-    # docker.io/foo/bar or foo/bar is the image so can't use a name to filter
-    pat = '(?:^|/)' + i.replace(':', r'\s+') + r'\s+'
-    if res and re.search(pat, res, flags=re.MULTILINE + re.IGNORECASE):
+    if exists:
         new['comment'] = 'image already pulled'
     else:
         _sh('docker pull ' + i, ret)
@@ -208,8 +210,9 @@ def _call_state(state, kwargs, ret):
         # not __name__
         state = 'bivio' + '.' + state
     new = __states__[state](**zz)
+    _debug('state={} ret={}', state, new)
     _inv(zz, new)
-    return _ret_merge(zz['name'], ret, new)
+    return _ret_merge(zz, ret, new)
 
 
 def _caller():
@@ -256,6 +259,16 @@ def _docker_container_args(kwargs):
     return zz, ret
 
 
+def _docker_image_exists(image, ret):
+    res = _sh('docker images', ret)
+    if not ret['result']:
+        return None, ret
+    # docker.io/foo/bar or foo/bar is the image so can't use a name to filter
+    pat = '(?:^|/)' + image.replace(':', r'\s+') + r'\s+'
+    res = res and re.search(pat, res, flags=re.MULTILINE + re.IGNORECASE)
+    return res, ret
+
+
 def _inv(kwargs, ret=None):
     zz = copy.deepcopy(kwargs)
     zz['fun'] = _caller()
@@ -278,7 +291,13 @@ def _is_test():
 
 
 def _pillar(key):
-    return __pillar__['bivio'][_caller()][key]
+    full_key = ['bivio', _caller()] + key.split('.')
+    res = __pillar__
+    for k in full_key:
+        if k not in res:
+            raise KeyError('{}: pillar not found'.format('.'.join(full_key)))
+        res = res[k]
+    return res
 
 
 def _require():
@@ -291,6 +310,7 @@ def _ret_init(kwargs):
     return {
         'result': True,
         'changes': {},
+        'pchanges': {},
         'name': kwargs['name'],
         'comment': '',
     }
@@ -299,27 +319,23 @@ def _ret_init(kwargs):
 def _ret_merge(name, ret, new):
     if isinstance(name, dict):
         name = name['name']
-    _debug('{} ret={}', name, new)
-    if 'changes' in new and new['changes']:
-        if _any(('old', 'new'), new['changes']):
-            ret['changes'][name] = new['changes']
-        else:
-            ret['changes'].update(new['changes'])
-        for v in ret['changes'].values():
-            for k in 'old', 'new':
-                if not k in v:
-                    v[k] = None
+    _debug('name={} new={}', name, new)
+    for changes_type in 'changes', 'pchanges':
+        if changes_type in new and new[changes_type]:
+            if _any(('old', 'new', 'diff'), new[changes_type]):
+                ret[changes_type][name] = new[changes_type]
+            else:
+                ret[changes_type].update(new[changes_type])
     if 'comment' in new and new['comment']:
-        _debug('{}={}', name, new['comment'])
         prefix = name + ': '
         if new['comment'].startswith(prefix):
             prefix = ''
         ret['comment'] += prefix + new['comment']
         if not ret['comment'].endswith('\n'):
             ret['comment'] += '\n'
-        _debug('{} 2={}', name, ret['comment'])
     if 'result' in new and not new['result']:
         ret['result'] = False
+    _debug('ret={}', ret)
     return ret
 
 
@@ -351,7 +367,7 @@ def _service_restart(zz, ret):
         ret,
         {
             'changes': {zz['name']: {'new': '; '.join(changes)}},
-            'comment': '; '.join('comment'),
+            'comment': '; '.join(comment),
         },
     )
 
@@ -395,7 +411,7 @@ def _sh(cmd, ret, ignore_errors=False):
             name,
             ret,
             {
-                'result': 'False',
+                'result': False,
                 'comment': 'ERROR={} stdout={} stderr={}'.format(
                     err, stdout[-1000:], stderr[-1000:]),
             },
