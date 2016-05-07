@@ -16,13 +16,14 @@ _initialized = False
 
 _SHELL_SAFE_ARG = re.compile(r'^[-_/:\.\+\@=,a-zA-Z0-9]+$')
 
-_DOCKER_PAIR_FLAGS = (
-    ('volumes', '-v'),
-    ('ports', '-p'),
-    ('links', '--link'),
-    ('env', '-e'),
-)
+_DOCKER_FLAG_PAIRS = {
+    'volumes': '-v',
+    'ports': '-p',
+    'links': '--link',
+    'env': '-e',
+}
 
+_DOCKER_PILLAR_CONST = ('program', 'sock', 'stop_time')
 
 '''
 def docker_update():
@@ -66,6 +67,9 @@ jupyterhub:
     zz = {}
     do we know??
     """
+    # Needs to be set here for _caller()
+    for p in _DOCKER_PILLAR_CONST:
+        kwargs[p] = _pillar(p)
     zz, ret = _docker_container_args(kwargs)
     _call_state('docker_image', {'name': zz['image']}, ret)
     _call_state(
@@ -239,20 +243,22 @@ def _debug(fmt, *args, **kwargs):
 def _docker_container_args(kwargs):
     zz, ret = _state_init(kwargs)
     #TODO: args need to be sanitized (safe_name with spaces for env)
-    args = '--name ' + zz['name']
+    start = '{program} run --tty --name {name}'.format(**zz)
     user = zz.get('user')
     if user:
-        args += ' -u ' + user
-    args += _docker_container_args_pairs(zz)
-    if zz.get('docker_sock', False):
-        x = _pillar('docker_sock')
-        args += ' -v {}:{}'.format(x, x)
-    args += ' ' + zz['image']
+        start += ' -u ' + user
+    start += _docker_container_args_pairs(zz)
+    if zz.get('want_docker_sock', False):
+        f = zz['sock']
+        start += ' -v {}:{}'.format(f, f)
+    start += ' ' + zz['image']
     #TODO: allow array or use sh -c
     cmd = zz.get('cmd', None)
     if cmd:
-        args += ' ' + cmd
-    zz['args'] = args
+        start += ' ' + cmd
+    zz['start'] = start
+    zz['remove'] = '{program} rm --force {name}'.format(**zz)
+    zz['stop'] = '{program} stop --time={stop_time} {name}'.format(**zz)
     after = [s + '.service' for s in zz.get('after', [])]
     zz['after'] = ' '.join(after + ['docker.service'])
     return zz, ret
@@ -273,15 +279,20 @@ def _docker_container_args_pairs(zz):
         return map(str, e)
 
     args = ''
-    for key, flag in _DOCKER_PAIR_FLAGS:
+    for key, flag in _DOCKER_FLAG_PAIRS.iteritems():
         if key not in zz or not zz[key]:
+            # canonicalize for 'init'
+            zz[key] = []
             continue
-        is_env = key == 'env':
+        is_env = key == 'env'
         sep = '=' if is_env else ':'
         # canonicalize for 'init'
         zz[key] = map(_clean, zz[key])
         for v in zz[key]:
             s = ' ' + flag + ' ' + sep.join(v)
+            # The :Z sets the selinux context to the appropriate
+            # Multi-Category Security (MCS)
+            # http://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
             if key == 'volumes':
                 s += ':Z'
             args += s
@@ -291,14 +302,43 @@ def _docker_container_args_pairs(zz):
 def _docker_container_init(zz, ret):
     if not (ret['result'] and 'init' in zz):
         return ret
-    init_zz = zz['init']
-    for key, _ in _DOCKER_PAIR_FLAGS:
-        if init_zz
-    for v in
-    main_zz = zz
-    zz = copy.deepcopy(main_zz)
-    zz.update(zz['init'])
+    container = zz['name']
+    for r in 'sentinel', 'cmd':
+        if not r in zz['init']:
+            raise ValueError('init.{} required'.format(r))
+    zz = _docker_container_init_args(zz)
+    s = zz['sentinel']
+    if not os.path.isabs(s):
+        raise ValueError('{}: sentinel is not absolute path'.format(s))
+    if os.path.exists(s):
+        return _ret_merge(s, ret, {'comment': 'already initialized (sentinel exists)'})
+    _sh('systemctl stop ' + container, {'result': True}, ignore_errors=True)
+    # Now prepare "start"
+    zz, _ = _docker_container_args(zz)
+    _sh(zz['start'], ret)
+    if not ret['result']:
+        return _ret_merge(s, ret, {'comment': 'init failed'})
+    if not os.path.exists(s):
+        return _ret_merge(s, ret, {'result': False, 'comment': 'sentinel was not created'})
+    return _ret_merge(s, ret, {'comment': 'init succeeded (sentinel created)', 'changes': {'new': 'sentinel created'}})
 
+
+def _docker_container_init_args(zz):
+    # Copy, because there are shallow copies below
+    orig_zz = copy.deepcopy(zz)
+    zz = orig_zz
+    # Doesn't matter that we wipe this in orig_zz
+    zzi = zz['init']
+    zzi['name'] = zz['name'] + '.init'
+    for p in _DOCKER_PILLAR_CONST + ('image',):
+        zzi[p] = zz[p]
+    zz, _ = _docker_container_args(zzi)
+    for key, orig_v in orig_zz.iteritems():
+        if key in _DOCKER_FLAG_PAIRS:
+            zz[key] = orig_v + zz[key]
+        elif not key in zz:
+            zz[key] = orig_v
+    return zz
 
 
 def _docker_image_exists(image, ret):

@@ -1,10 +1,15 @@
-postgres_image:
-  bivio.docker_image:
-    - image: radiasoft/postgres
+base_pkgs:
+  bivio.pkg_installed:
+    pkgs:
+      - docker
+      - emacs-nox
+      - lsof
+      - screen
+      - tar
+      - telnet
 
 postgresql:
   bivio.docker_container:
-# channel is implicit -- machine is always on one channel
     - image: radiasoft/postgres
     - volumes:
       - [ /var/lib/postgresql/data /var/lib/postgresql/data ]
@@ -16,10 +21,8 @@ postgresql:
       env:
         - [ POSTGRES_PASSWORD {{ postgres.admin_pass }} ]
         - [ JPY_PSQL_PASSWORD {{ jupyterhub.db_pass }} ]
+      cmd: /radia-init.sh
       sentinel: /var/lib/postgresql/data/PG_VERSION
-
-docker_sock_semodule:
-  bivio.docker_sock_semodule: []
 
 jupyter_singleuser:
   bivio.docker_image:
@@ -35,7 +38,7 @@ jupyterhub:
     - image: radiasoft/jupyterhub
     - links:
         - postgresql
-    - docker_sock: True
+    - want_docker_sock: True
     - volumes:
         - [ /var/lib/jupyterhub/conf /srv/jupyterhub/conf ]
     - user: root
@@ -48,4 +51,3 @@ jupyterhub:
         - bivio.postgresql
         - bivio.jupyter_singleuser
         - bivio.jupyterhub_config
-        - bivio.docker_sock_semodule

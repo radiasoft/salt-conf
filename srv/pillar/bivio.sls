@@ -7,7 +7,9 @@ bivio:
 
   docker_container:
     user: vagrant
-    docker_sock: /run/docker.sock
+    sock: /run/docker.sock
+    program: /usr/bin/docker
+    stop_time: 2
     systemd:
       filename: '/etc/systemd/system/{name}.service'
 {% raw %}
@@ -20,12 +22,9 @@ bivio:
         [Service]
         Restart=on-failure
         RestartSec=10
-        ExecStartPre=-/usr/bin/docker rm --force {{ zz.name }}
-        # The :Z sets the selinux context to the appropriate
-        # Multi-Category Security (MCS)
-        # http://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
-        ExecStart=/usr/bin/docker run --tty {{ zz.args }}
-        ExecStop=-/usr/bin/docker stop --time=2 {{ zz.name }}
+        ExecStartPre=-{{ zz.remove }}
+        ExecStart={{ zz.start }}
+        ExecStop=-{{ zz.stop }}
 
         [Install]
         WantedBy=multi-user.target

@@ -1,1 +1,1 @@
-pykern_pkconfig_channel: beta
+channel: beta
