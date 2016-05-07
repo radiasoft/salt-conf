@@ -20,11 +20,12 @@ bivio:
         [Service]
         Restart=on-failure
         RestartSec=10
+        ExecStartPre=-/usr/bin/docker rm --force {{ zz.name }}
         # The :Z sets the selinux context to the appropriate
         # Multi-Category Security (MCS)
         # http://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
-        ExecStart=/usr/bin/docker run -t --rm {{ zz.args }}
-        ExecStop=-/usr/bin/docker stop -t 2 {{ zz.name }}
+        ExecStart=/usr/bin/docker run --tty {{ zz.args }}
+        ExecStop=-/usr/bin/docker stop --time=2 {{ zz.name }}
 
         [Install]
         WantedBy=multi-user.target
