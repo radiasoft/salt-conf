@@ -16,6 +16,14 @@ _initialized = False
 
 _SHELL_SAFE_ARG = re.compile(r'^[-_/:\.\+\@=,a-zA-Z0-9]+$')
 
+_DOCKER_PAIR_FLAGS = (
+    ('volumes', '-v'),
+    ('ports', '-p'),
+    ('links', '--link'),
+    ('env', '-e'),
+)
+
+
 '''
 def docker_update():
     update and restart
@@ -69,6 +77,7 @@ jupyterhub:
         },
         ret,
     )
+    _docker_container_init(zz, ret)
     return _service_restart(zz, ret)
 
 
@@ -229,27 +238,17 @@ def _debug(fmt, *args, **kwargs):
 
 def _docker_container_args(kwargs):
     zz, ret = _state_init(kwargs)
+    #TODO: args need to be sanitized (safe_name with spaces for env)
     args = '--name ' + zz['name']
     user = zz.get('user')
     if user:
         args += ' -u ' + user
-    #TODO: support scalar
-#TODO: share code
-    for v in zz.get('volumes', []):
-          # TODO: mkdir??? yes, be
-        # TODO: quote arg
-        s = ' -v ' + ':'.join(v) + ':Z'
-        args += s
+    args += _docker_container_args_pairs(zz)
     if zz.get('docker_sock', False):
         x = _pillar('docker_sock')
         args += ' -v {}:{}'.format(x, x)
-    for p in zz.get('ports', []):
-        args += ' -p ' + ':'.join(p)
-    for l in zz.get('links', []):
-        args += ' --link ' + ':'.join(l)
-    for e in zz.get('env', []):
-        args += " -e '" + '='.join(e) + "'"
     args += ' ' + zz['image']
+    #TODO: allow array or use sh -c
     cmd = zz.get('cmd', None)
     if cmd:
         args += ' ' + cmd
@@ -257,6 +256,49 @@ def _docker_container_args(kwargs):
     after = [s + '.service' for s in zz.get('after', [])]
     zz['after'] = ' '.join(after + ['docker.service'])
     return zz, ret
+
+
+def _docker_container_args_pairs(zz):
+    is_env = False
+
+    def _clean(e):
+        if is_env:
+            assert len(e) == 2, \
+                '{}: env values must be two elements'.format(e)
+        elif not isinstance(e, (list, tuple)):
+            e = (e, e)
+        elif len(e) < 2:
+            # will fail for len=0
+            e = (e[0], e[0])
+        return map(str, e)
+
+    args = ''
+    for key, flag in _DOCKER_PAIR_FLAGS:
+        if key not in zz or not zz[key]:
+            continue
+        is_env = key == 'env':
+        sep = '=' if is_env else ':'
+        # canonicalize for 'init'
+        zz[key] = map(_clean, zz[key])
+        for v in zz[key]:
+            s = ' ' + flag + ' ' + sep.join(v)
+            if key == 'volumes':
+                s += ':Z'
+            args += s
+    return args
+
+
+def _docker_container_init(zz, ret):
+    if not (ret['result'] and 'init' in zz):
+        return ret
+    init_zz = zz['init']
+    for key, _ in _DOCKER_PAIR_FLAGS:
+        if init_zz
+    for v in
+    main_zz = zz
+    zz = copy.deepcopy(main_zz)
+    zz.update(zz['init'])
+
 
 
 def _docker_image_exists(image, ret):
