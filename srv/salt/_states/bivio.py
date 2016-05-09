@@ -12,6 +12,7 @@ import inspect
 import logging
 import os
 import os.path
+import pwd
 import re
 import salt.utils
 import subprocess
@@ -76,7 +77,7 @@ def docker_container(**kwargs):
 
 def docker_image(**kwargs):
     zz, ret = _state_init(kwargs)
-    _call_state('docker_service', {'name': 'docker'}, ret)
+    _call_state('docker_service', {}, ret)
     if not ret['result']:
         return ret
     i = zz['image_name']
@@ -99,21 +100,25 @@ def docker_image(**kwargs):
 
 def docker_service(**kwargs):
     zz, ret = _state_init(kwargs)
+    _call_state('host_user', {}, ret)
     zz['service_name'] = 'docker'
     # Ignore incoming name as it doesn't matter for the rest
     if _service_status(zz)[0]:
-        return _ret_merge(zz, ret, {'comment': 'service is running'})
-    for pkg in zz['required_pkgs']:
-        _call_state('pkg_installed', {'name': pkg}, ret)
-    if not ret['result']:
-        return ret
-    lvs = _sh('lvs', ret);
-    # VirtualBox VMs don't have LVMs so we used the default loopback device
-    # and don't need to setup storage. Fedora has "docker" in the
-    # volume name.
-    if lvs and 'docker' not in lvs:
-        _sh('docker-storage-setup', ret)
-    return _service_restart(zz, ret)
+        _ret_merge(zz, ret, {'comment': 'service is running'})
+    else:
+        _call_state('pkg_installed', {'name': 'docker_service.pkgs', 'pkgs': zz['required_pkgs']}, ret)
+        if not ret['result']:
+            return ret
+        lvs = _sh('lvs', ret);
+        # VirtualBox VMs don't have LVMs so we used the default loopback device
+        # and don't need to setup storage. Fedora has "docker" in the
+        # volume name.
+        if lvs and 'docker' not in lvs:
+            _sh('docker-storage-setup', ret)
+        _service_restart(zz, ret)
+    if ret['changes']:
+        _sh('chgrp {sock_group} {sock}'.format(**zz), ret)
+    return ret
 
 
 def docker_sock_semodule(**kwargs):
@@ -136,8 +141,24 @@ def docker_sock_semodule(**kwargs):
         _sh('semodule -i tmp.pp', ret)
     return ret
 
+
 def host_user(**kwargs):
     zz, ret = _state_init(kwargs)
+    _host_user_uid(zz, ret)
+    _call_state('group.present', {'name': zz['user_name'], 'gid': zz['uid']}, ret)
+    _call_state('group.present', {'name': zz['docker_group'], 'gid': zz['docker_gid']}, ret)
+    _call_state(
+        'user.present',
+        {
+            'name': zz['user_name'],
+            'uid': zz['uid'],
+            'gid': zz['uid'],
+            'groups': [zz['docker_group']],
+            'createhome': True,
+        },
+        ret,
+    )
+    return ret
 
 
 def mod_init(low):
@@ -186,11 +207,8 @@ def plain_file(**kwargs):
 
 
 def pkg_installed(**kwargs):
-    ret = _ret_init(kwargs)
-    if _is_test():
-        # Can't acctually install
-        return ret
-    _call_state('pkg.installed', kwargs, ret)
+    zz, ret = _state_init(kwargs)
+    _call_state('pkg.installed', zz, ret)
     return ret
 
 
@@ -312,7 +330,7 @@ def _docker_container_init(zz, ret):
     if os.path.exists(s):
         return _ret_merge(s, ret, {'comment': 'already initialized (sentinel exists)'})
     _sh('systemctl stop ' + zz['service_name'], {'result': True}, ignore_errors=True)
-    _sh(zz['remove'], ret)
+    _sh(zz['remove'], ret, ignore_errors=True)
     _sh(zz['start'], ret)
     if not ret['result']:
         return _ret_merge(s, ret, {'comment': 'init failed'})
@@ -367,6 +385,28 @@ def _docker_image_exists(image, ret):
     return res, ret
 
 
+def _host_user_uid(zz, ret):
+    """Ensure host_user's uid is what we expect.
+
+    Fedora:23 Vagrant image has user vagrant 1001, which is a
+    change from previous releases (1000) so we have to change
+    the uid/gid to keep it consistent. This operation can't
+    be executed with salt-call, because you'll be logged in
+    as vagrant.
+    """
+    try:
+        u = pwd.getpwnam(zz['user_name'])
+        if u.pw_uid == zz['uid']:
+            return
+    except KeyError:
+        # User doesn't exist, which is fine (non-Vagrant Fedora install)
+        return
+    # Need to fix; Something that user.present can't do
+    _sh('usermod -u {uid} {user_name}'.format(**zz), ret)
+    _sh('groupmod -g {uid} {user_name}'.format(**zz), ret)
+    _sh('chgrp -R {user_name} {pw_dir}'.format(pw_dir=u.pw_dir, **zz), ret)
+
+
 def _inv(kwargs, ret=None):
     zz = copy.deepcopy(kwargs)
     zz['fun'] = _caller()
@@ -381,11 +421,6 @@ def _inv(kwargs, ret=None):
         f.write(
             yaml.dump([zz], default_flow_style=False, indent=2) + '\n',
         )
-
-
-def _is_test():
-    #TODO@robnagler better definition of testing
-    return __grains__['uid'] != 0
 
 
 def _pillar(key=None, caller=None):
@@ -464,11 +499,12 @@ def _service_restart(zz, ret):
             comment.append('service was not {}'.format(s))
     if updated and not comment:
         comment.append('restarted')
+    changes = {zz['name']: {'new': '; '.join(changes)}} if changes else {}
     return _ret_merge(
         zz['name'],
         ret,
         {
-            'changes': {zz['name']: {'new': '; '.join(changes)}},
+            'changes': changes,
             'comment': '; '.join(comment),
         },
     )

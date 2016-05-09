@@ -2,6 +2,8 @@
     user='vagrant',
     file_mode='440',
     dir_mode='750',
+    docker_group='docker',
+    docker_sock='/run/docker.sock',
 ) %}
 
 bivio:
@@ -11,7 +13,7 @@ bivio:
   docker_container:
     host_user: "{{ zz.user }}"
     guest_user: "{{ zz.user }}"
-    sock: /run/docker.sock
+    sock: "{{ zz.docker_sock }}"
     program: /usr/bin/docker
     stop_time: 2
     makedirs: True
@@ -37,6 +39,8 @@ bivio:
   docker_image: {}
 
   docker_service:
+    sock: "{{ zz.docker_sock }}"
+    sock_group: "{{ zz.docker_group }}"
     required_pkgs:
       - docker
       - lvm2
@@ -59,9 +63,9 @@ bivio:
 
   host_user:
     docker_gid: 496
-    docker_group: docker
+    docker_group: "{{ zz.docker_group }}"
     uid: 1000
-    user: "{{ zz.user }}"
+    user_name: "{{ zz.user }}"
     want_docker_sock: True
 
   mod_init:
@@ -81,3 +85,5 @@ bivio:
     mode: "{{ zz.file_mode }}"
     template: jinja
     user: "{{ zz.user }}"
+
+  pkg_installed: {}
