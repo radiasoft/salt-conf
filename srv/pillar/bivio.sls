@@ -1,21 +1,25 @@
-bivio:
-  mod_init:
-    inventory: '/var/lib/bivio-salt/inventory/{now}.yml'
+{% set zz = dict(
+    user='vagrant',
+    file_mode='440',
+    dir_mode='750',
+) %}
 
-  dockersock:
-    policy: dockersock
+bivio:
+  docker:
+    service_name: docker
 
   docker_container:
-    user: vagrant
+    host_user: "{{ zz.user }}"
+    guest_user: "{{ zz.user }}"
     sock: /run/docker.sock
     program: /usr/bin/docker
     stop_time: 2
-    systemd:
-      filename: '/etc/systemd/system/{name}.service'
+    makedirs: True
+    systemd_filename: '/etc/systemd/system/{service_name}.service'
 {% raw %}
-      contents: |
+    systemd_contents: |
         [Unit]
-        Description={{ zz.name }}
+        Description={{ zz.service_name }}
         Requires={{ zz.after }}
         After={{ zz.after }}
 
@@ -30,11 +34,18 @@ bivio:
         WantedBy=multi-user.target
 {% endraw %}
 
+  docker_image: {}
+
+  docker_service:
+    required_pkgs:
+      - docker
+      - lvm2
+
   docker_sock_semodule:
-    name: bivio_docker_sock
+    policy_name: bivio_docker_sock
 {% raw %}
     contents: |
-      module {{ pillar.bivio.docker_sock_semodule.name }} 1.0;
+      module {{ zz.policy_name }} 1.0;
       require {
           type docker_var_run_t;
           type docker_t;
@@ -46,12 +57,27 @@ bivio:
       allow svirt_lxc_net_t docker_var_run_t:sock_file write;
 {% endraw %}
 
+  host_user:
+    docker_gid: 496
+    docker_group: docker
+    uid: 1000
+    user: "{{ zz.user }}"
+    want_docker_sock: True
+
+  mod_init:
+    inventory: '/var/lib/bivio-salt/inventory/{now}.yml'
+
+  plain_directory:
+    dir_mode: "{{ zz.dir_mode }}"
+    file_mode: "{{ zz.file_mode }}"
+    group: "{{ zz.user }}"
+    makedirs: True
+    user: "{{ zz.user }}"
+
   plain_file:
-    source: "salt://./{name}"
-    defaults:
-      dir_mode: "750"
-      group: "{{ grains.username }}"
-      makedirs: True
-      mode: "440"
-      template: jinja
-      user: "{{ grains.username }}"
+    dir_mode: "{{ zz.dir_mode }}"
+    group: "{{ zz.user }}"
+    makedirs: True
+    mode: "{{ zz.file_mode }}"
+    template: jinja
+    user: "{{ zz.user }}"

@@ -1,3 +1,10 @@
+"""
+
+* Do not rely on 'name', be explicit: service_name, image_name, etc.
+* Defaults are in pillar by same name as state, all are overwriteable by args
+* Reuse flags like dir_mode, makedirs.
+
+"""
 import contextlib
 import copy
 import datetime
@@ -14,7 +21,8 @@ import yaml
 
 _initialized = False
 
-_SHELL_SAFE_ARG = re.compile(r'^[-_/:\.\+\@=,a-zA-Z0-9]+$')
+# Very conservative unquoted shell command argument
+_SHELL_SAFE_ARG = re.compile(r'^[-_/:\.\+,a-zA-Z0-9]+$')
 
 _DOCKER_FLAG_PAIRS = {
     'volumes': '-v',
@@ -22,8 +30,6 @@ _DOCKER_FLAG_PAIRS = {
     'links': '--link',
     'env': '-e',
 }
-
-_DOCKER_PILLAR_CONST = ('program', 'sock', 'stop_time')
 
 '''
 def docker_update():
@@ -38,61 +44,42 @@ def pkg_update():
 '''
 
 def docker_container(**kwargs):
-    """Initiate a docker container as a systemd service.
-
-    # globally unique name
-jupyterhub:
-  bivio.docker_container:
-    - name: "radiasoft/jupyterhub:{{ pillar.channel }}"
-    - links: [ postgres:postgres ]
-    - volumes: [ {{ zz.host_conf.d }}:{{ zz.guest_conf.d }} ]
-    - gueset_user: root
-    - dockersock: True
-    - ports: [ 5692:8000 ]
-    - cmd: jupyterhub -f {{ zz.guest_config }}
-    - requires: [ postgres jupyter_singleuser jupyter_config ]
-    every object needs to be logged somewhere
-    write container to a file (dependencies natural)
-        so can know what to restart
-    there has to be a state file which contains
-       the order of the startup states
-       all states run and recreate the state
-       with the ability to undo.
-       a software update would look at that state
-       and decide which services needed to be restarted based
-       on changes to docker images
-       docker images would need to know if we should quiesce
-       the entire system
-    dockersock = dockersock
-    zz = {}
-    do we know??
-    """
-    # Needs to be set here for _caller()
-    for p in _DOCKER_PILLAR_CONST:
-        kwargs[p] = _pillar(p)
+    """Initiate a docker container as a systemd service."""
+    # Needs to be set here for _caller() to be right
     zz, ret = _docker_container_args(kwargs)
-    _call_state('docker_image', {'name': zz['image']}, ret)
+    _call_state('docker_image', {'name': zz['name'] + '.image', 'image_name': zz['image_name']}, ret)
     _call_state(
         'plain_file',
         {
-            'name': _pillar('systemd.filename').format(**zz),
-            'contents': _pillar('systemd.contents'),
+            'name': zz['service_name'] + '.systemd_file',
+            'file_name': zz['systemd_filename'].format(**zz),
+            'contents': zz['systemd_contents'],
             'zz': zz,
         },
         ret,
     )
+    if zz['makedirs']:
+        for v in zz['volumes']:
+            _call_state(
+                'plain_directory',
+                {
+                    'name': zz['container_name'] + '.directory.' + v[0],
+                    'dir_name': v[0],
+                    'user': zz['host_user'],
+                    'group': zz['host_user'],
+                },
+                ret,
+            )
     _docker_container_init(zz, ret)
     return _service_restart(zz, ret)
 
 
 def docker_image(**kwargs):
-    _debug('kwargs={}', kwargs)
     zz, ret = _state_init(kwargs)
     _call_state('docker_service', {'name': 'docker'}, ret)
     if not ret['result']:
         return ret
-    _debug('name={}', zz['name'])
-    i = zz['name']
+    i = zz['image_name']
     if not ':' in i:
         i += ':' + _assert_name(__pillar__['channel'])
     exists, ret = _docker_image_exists(i, ret)
@@ -112,49 +99,45 @@ def docker_image(**kwargs):
 
 def docker_service(**kwargs):
     zz, ret = _state_init(kwargs)
-    zz['name'] = 'docker'
+    zz['service_name'] = 'docker'
     # Ignore incoming name as it doesn't matter for the rest
     if _service_status(zz)[0]:
         return _ret_merge(zz, ret, {'comment': 'service is running'})
-    _call_state('pkg_installed', {'name': 'docker'}, ret)
-    _call_state('pkg_installed', {'name': 'lvm2'}, ret)
+    for pkg in zz['required_pkgs']:
+        _call_state('pkg_installed', {'name': pkg}, ret)
     if not ret['result']:
         return ret
     lvs = _sh('lvs', ret);
     # VirtualBox VMs don't have LVMs so we used the default loopback device
-    # and don't need to setup storage
+    # and don't need to setup storage. Fedora has "docker" in the
+    # volume name.
     if lvs and 'docker' not in lvs:
-        _sh('docker-storage_setup', ret)
+        _sh('docker-storage-setup', ret)
     return _service_restart(zz, ret)
 
 
 def docker_sock_semodule(**kwargs):
     zz, ret = _state_init(kwargs)
     modules = _sh('semodule -l', ret)
-    if modules is None or _pillar('name') in modules:
+    if modules is None or zz['policy_name'] in modules:
         return ret
     with _temp_dir() as d:
         _call_state(
             'plain_file',
             {
-                'name': os.path.join(d, 'z.te'),
-                'contents': _pillar('contents'),
+                'name': 'docker_sock_semodule.policy_template',
+                'file_name': os.path.join(d, 'tmp.te'),
+                'contents': zz['contents'],
             },
             ret,
         )
-        _sh('checkmodule -M -m z.te -o z.mod', ret)
-        _sh('semodule_package -m z.mod -o z.pp', ret)
-        _sh('semodule -i z.pp', ret)
+        _sh('checkmodule -M -m tmp.te -o tmp.mod', ret)
+        _sh('semodule_package -m tmp.mod -o tmp.pp', ret)
+        _sh('semodule -i tmp.pp', ret)
     return ret
 
-
-def pkg_installed(**kwargs):
-    ret = _ret_init(kwargs)
-    if _is_test():
-        # Can't acctually install
-        return ret
-    _call_state('pkg.installed', kwargs, ret)
-    return ret
+def host_user(**kwargs):
+    zz, ret = _state_init(kwargs)
 
 
 def mod_init(low):
@@ -167,7 +150,7 @@ def mod_init(low):
     ret = _ret_init({'name': 'mod_init'})
     _log = logging.getLogger(__name__)
     now = datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')
-    _inventory = _pillar('inventory').format(now=now)
+    _inventory = _pillar(key='inventory').format(now=now)
     # The _inv() call in _call_state() happens after the
     # call to the state so it's safe to do this. This
     # handles the makedirs properly.
@@ -180,20 +163,34 @@ def mod_init(low):
     return True
 
 
+def plain_directory(**kwargs):
+    zz, ret = _state_init(kwargs)
+    zz['name'] = zz['dir_name']
+    _call_state('file.directory', zz, ret)
+    return ret
+
+
 def plain_file(**kwargs):
     zz, ret = _state_init(kwargs)
-    if not _any(('contents', 'source', 'text'), zz):
-        zz['source'] = _pillar('source').format(**zz)
-    if 'zz' in zz:
-        zz['context'] = {'zz': zz['zz']}
-    for k, v in _pillar('defaults').iteritems():
-        zz.setdefault(k, v)
+    zz['name'] = zz['file_name']
     op = 'managed'
     if zz.get('append', False):
         op = 'append'
         zz['text'] = zz['contents']
     ret = _ret_init(zz)
+    zz['context'] = {'zz': copy.deepcopy(zz)}
+    if 'zz' in zz:
+        zz['context']['zz'].update(zz['zz'])
     _call_state('file.' + op, zz, ret)
+    return ret
+
+
+def pkg_installed(**kwargs):
+    ret = _ret_init(kwargs)
+    if _is_test():
+        # Can't acctually install
+        return ret
+    _call_state('pkg.installed', kwargs, ret)
     return ret
 
 
@@ -241,24 +238,26 @@ def _debug(fmt, *args, **kwargs):
 
 
 def _docker_container_args(kwargs):
-    zz, ret = _state_init(kwargs)
+    # Called from multiple places so hardwire caller
+    zz, ret = _state_init(kwargs, caller='docker_container')
     #TODO: args need to be sanitized (safe_name with spaces for env)
-    start = '{program} run --tty --name {name}'.format(**zz)
-    user = zz.get('user')
-    if user:
-        start += ' -u ' + user
+    zz['service_name'] = zz['container_name']
+    start = '{program} run --tty --name {container_name}'.format(**zz)
+    guest_user = zz.get('guest_user')
+    if guest_user:
+        start += ' -u ' + guest_user
     start += _docker_container_args_pairs(zz)
     if zz.get('want_docker_sock', False):
         f = zz['sock']
         start += ' -v {}:{}'.format(f, f)
-    start += ' ' + zz['image']
+    start += ' ' + zz['image_name']
     #TODO: allow array or use sh -c
     cmd = zz.get('cmd', None)
     if cmd:
         start += ' ' + cmd
     zz['start'] = start
-    zz['remove'] = '{program} rm --force {name}'.format(**zz)
-    zz['stop'] = '{program} stop --time={stop_time} {name}'.format(**zz)
+    zz['remove'] = '{program} rm --force {container_name}'.format(**zz)
+    zz['stop'] = '{program} stop --time={stop_time} {container_name}'.format(**zz)
     after = [s + '.service' for s in zz.get('after', [])]
     zz['after'] = ' '.join(after + ['docker.service'])
     return zz, ret
@@ -292,6 +291,7 @@ def _docker_container_args_pairs(zz):
             s = ' ' + flag + ' ' + sep.join(v)
             # The :Z sets the selinux context to the appropriate
             # Multi-Category Security (MCS)
+
             # http://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
             if key == 'volumes':
                 s += ':Z'
@@ -302,7 +302,6 @@ def _docker_container_args_pairs(zz):
 def _docker_container_init(zz, ret):
     if not (ret['result'] and 'init' in zz):
         return ret
-    container = zz['name']
     for r in 'sentinel', 'cmd':
         if not r in zz['init']:
             raise ValueError('init.{} required'.format(r))
@@ -312,9 +311,8 @@ def _docker_container_init(zz, ret):
         raise ValueError('{}: sentinel is not absolute path'.format(s))
     if os.path.exists(s):
         return _ret_merge(s, ret, {'comment': 'already initialized (sentinel exists)'})
-    _sh('systemctl stop ' + container, {'result': True}, ignore_errors=True)
-    # Now prepare "start"
-    zz, _ = _docker_container_args(zz)
+    _sh('systemctl stop ' + zz['service_name'], {'result': True}, ignore_errors=True)
+    _sh(zz['remove'], ret)
     _sh(zz['start'], ret)
     if not ret['result']:
         return _ret_merge(s, ret, {'comment': 'init failed'})
@@ -326,19 +324,37 @@ def _docker_container_init(zz, ret):
 def _docker_container_init_args(zz):
     # Copy, because there are shallow copies below
     orig_zz = copy.deepcopy(zz)
-    zz = orig_zz
-    # Doesn't matter that we wipe this in orig_zz
-    zzi = zz['init']
-    zzi['name'] = zz['name'] + '.init'
-    for p in _DOCKER_PILLAR_CONST + ('image',):
-        zzi[p] = zz[p]
-    zz, _ = _docker_container_args(zzi)
-    for key, orig_v in orig_zz.iteritems():
-        if key in _DOCKER_FLAG_PAIRS:
-            zz[key] = orig_v + zz[key]
-        elif not key in zz:
-            zz[key] = orig_v
+    zz = orig_zz['init']
+    del orig_zz['init']
+    _docker_container_init_args_defaults(zz, orig_zz)
+    # Parse the original values before inserting flag pairs
+    zz, _ = _docker_container_args(zz)
+    _docker_container_init_args_pairs(zz, orig_zz)
+    # Second time is to prepare "start" after we fix up flag pairs
+    zz, _ = _docker_container_args(zz)
     return zz
+
+
+def _docker_container_init_args_defaults(zz, orig_zz):
+    """Copy orig_zz values into zz if not already set"""
+    zz['name'] = orig_zz['name'] + '.init'
+    for key, orig_v in orig_zz.iteritems():
+        if not (key in _DOCKER_FLAG_PAIRS or key in zz):
+            zz[key] = orig_v
+
+
+def _docker_container_init_args_pairs(zz, orig_zz):
+    """Insert flag pair values (volumes, ports, etc.) from orig_zz to new zz"""
+    for key, orig_v in orig_zz.iteritems():
+        if not key in _DOCKER_FLAG_PAIRS:
+            continue
+        already_exists = set([r[0] for r in zz[key]])
+        to_insert = []
+        for row in orig_v:
+            if not row[0] in already_exists:
+                to_insert.append(row)
+        _debug('key={} to_insert={}', key, to_insert)
+        zz[key] = to_insert + zz[key]
 
 
 def _docker_image_exists(image, ret):
@@ -372,13 +388,17 @@ def _is_test():
     return __grains__['uid'] != 0
 
 
-def _pillar(key):
-    full_key = ['bivio', _caller()] + key.split('.')
+def _pillar(key=None, caller=None):
+    full_key = ['bivio', caller or _caller()]
+    if key:
+         full_key += key.split('.')
     res = __pillar__
+    _debug('full_key={}', full_key)
     for k in full_key:
         if k not in res:
             raise KeyError('{}: pillar not found'.format('.'.join(full_key)))
         res = res[k]
+    _debug('res={}', res)
     return res
 
 
@@ -436,7 +456,7 @@ def _service_restart(zz, ret):
     for s, op in (('enabled', 'reenable'), ('active', 'restart')):
         if not updated and status[s]:
             continue
-        _sh('systemctl {} {}'.format(op, zz['name']), ret)
+        _sh('systemctl {} {}'.format(op, zz['service_name']), ret)
         if not ret['result']:
             return ret
         changes.append(op)
@@ -458,7 +478,7 @@ def _service_status(zz, which=('active', 'enabled')):
     ignored = _ret_init(zz)
     status = {}
     for k in which:
-        c = 'systemctl is-{} {}'.format(k, zz['name'])
+        c = 'systemctl is-{} {}'.format(k, zz['service_name'])
         out = _sh(c, ignored, ignore_errors=True)
         status[k] = bool(re.search('^' + k + r'\b', str(out)))
     return status['active'] and status['enabled'], status
@@ -467,7 +487,7 @@ def _service_status(zz, which=('active', 'enabled')):
 def _sh(cmd, ret, ignore_errors=False):
     if not ret['result']:
         return None
-    name = 'shell: ' + cmd
+    name = 'shell.' + cmd
     stdout = None
     stderr = None
     err = None
@@ -503,10 +523,14 @@ def _sh(cmd, ret, ignore_errors=False):
     return None if err else stdout
 
 
-def _state_init(kwargs):
+def _state_init(kwargs, caller=None):
     _debug('low={}', __lowstate__)
     zz = copy.deepcopy(kwargs)
+    for k, v in _pillar(caller=caller or _caller()).iteritems():
+        if not k in zz:
+            zz[k] = copy.deepcopy(v)
     _assert_name(zz)
+    ret = _ret_init(zz)
     return zz, _ret_init(zz)
 
 
