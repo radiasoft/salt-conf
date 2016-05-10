@@ -7,6 +7,11 @@
 ) %}
 
 bivio:
+  state_trees:
+    utilities:
+      require: []
+      include: True
+
   docker:
     service_name: docker
 
@@ -93,13 +98,3 @@ bivio:
     user: "{{ zz.user }}"
 
   pkg_installed: {}
-
-file_client: local
-strip_colors: True
-color: False
-user: vagrant
-log_file: /dev/null
-key_logfile: /dev/null
-log_level: debug
-states_dirs: [/srv/salt/_states]
-failhard: True

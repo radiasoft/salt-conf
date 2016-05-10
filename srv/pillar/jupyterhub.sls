@@ -1,4 +1,12 @@
 # Use secret.py to generate values required for salt/containers.sls
+bivio:
+  state_trees:
+    jupyterhub:
+      include: False
+      require:
+        - utilities
+
+
 jupyterhub:
   host_name: localhost
   host_port: 8000

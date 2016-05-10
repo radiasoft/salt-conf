@@ -1,7 +1,3 @@
 base:
   '*':
-#    - test
-    - alpha
-    - bivio
-    - containers
-    - secret
+    - {{ grains.fqdn }}
