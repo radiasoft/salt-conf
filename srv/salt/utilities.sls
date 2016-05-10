@@ -1,14 +1,14 @@
-utilities:
-  pkg.installed:
+base_pkgs:
+  bivio.pkg_installed:
     - pkgs:
+      - docker
       - emacs-nox
-      - screen
-      - telnet
-      - tar
       - lsof
+      - screen
+      - tar
+      - telnet
 
-/etc/screenrc:
-  file.append:
+screenrc_config:
+  bivio.file_append:
+    - file_name: /etc/screenrc
     - text: "escape ^^^^"
-  require:
-     - pkg: screen

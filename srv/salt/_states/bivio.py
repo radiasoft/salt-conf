@@ -3,7 +3,9 @@
 * Do not rely on 'name', be explicit: service_name, image_name, etc.
 * Defaults are in pillar by same name as state, all are overwriteable by args
 * Reuse flags like dir_mode, makedirs.
-
+* Avoid setting values in states that can't be overriden by pillars
+* Do not use files unless absolutely necessary. You can't override files or states,
+  but you can override pillars with more qualified config.
 """
 import contextlib
 import copy
@@ -48,6 +50,8 @@ def docker_container(**kwargs):
     """Initiate a docker container as a systemd service."""
     # Needs to be set here for _caller() to be right
     zz, ret = _docker_container_args(kwargs)
+    if not ret['result']:
+        return ret
     _call_state('docker_image', {'name': zz['name'] + '.image', 'image_name': zz['image_name']}, ret)
     _call_state(
         'plain_file',
@@ -80,6 +84,8 @@ def docker_container(**kwargs):
 
 def docker_image(**kwargs):
     zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
     _call_state('docker_service', {}, ret)
     if not ret['result']:
         return ret
@@ -104,6 +110,8 @@ def docker_image(**kwargs):
 
 def docker_service(**kwargs):
     zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
     _call_state('host_user', {}, ret)
     zz['service_name'] = 'docker'
     # Ignore incoming name as it doesn't matter for the rest
@@ -127,6 +135,8 @@ def docker_service(**kwargs):
 
 def docker_sock_semodule(**kwargs):
     zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
     modules = _sh('semodule -l', ret)
     if modules is None or zz['policy_name'] in modules:
         return ret
@@ -149,8 +159,21 @@ def docker_sock_semodule(**kwargs):
     return ret
 
 
+def file_append(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    zz['name'] = zz['file_name']
+    # TypeError: append() got an unexpected keyword argument 'file_name'
+    del zz['file_name']
+    _call_state('file.append', zz, ret)
+    return ret
+
+
 def host_user(**kwargs):
     zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
     _assert_name(zz['user_name'])
     _host_user_uid(zz, ret)
     _call_state('group.present', {'name': zz['user_name'], 'gid': zz['uid']}, ret)
@@ -169,31 +192,40 @@ def host_user(**kwargs):
     return ret
 
 
-def mod_init(low):
-    global _initialized
-    if _initialized:
-        return True
-    assert not __opts__['test'], 'test mode not supported'
-    global _inventory, _log
-    _initialized = True
-    ret = _ret_init({'name': 'mod_init'})
-    _log = logging.getLogger(__name__)
-    now = datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')
-    _inventory = _pillar(key='inventory').format(now=now)
-    # The _inv() call in _call_state() happens after the
-    # call to the state so it's safe to do this. This
-    # handles the makedirs properly.
-    d = os.path.dirname(_inventory)
-    if not os.path.exists(d):
-        os.makedirs(d)
-    with salt.utils.flopen(_inventory, 'w') as f:
-        f.write('')
-    _inv({'start': now})
-    return True
+def minion_update(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    _call_state(
+        'plain_file',
+        {
+            'name': 'minion.config',
+            'file_name': zz['config_name'],
+            'source': zz['config_source'],
+            'user': 'root',
+            'group': 'root',
+            'mode': '400',
+        },
+        ret,
+    )
+    if not ret['result'] or not ret['changes']:
+        return ret
+    __salt__['service.restart'](name='salt-minion')
+    return _ret_merge(
+        zz,
+        ret,
+        {
+            'result': False,
+            'changes': {'new': 'salt-minion restarted'},
+            'comment': '\n*** YOU NEED TO RERUN THIS STATE unless it is minion_update ****\n',
+        },
+    )
 
 
 def plain_directory(**kwargs):
     zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
     zz['name'] = zz['dir_name']
     _call_state('file.directory', zz, ret)
     return ret
@@ -201,6 +233,8 @@ def plain_directory(**kwargs):
 
 def plain_file(**kwargs):
     zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
     zz['name'] = zz['file_name']
     op = 'managed'
     if zz.get('append', False):
@@ -216,6 +250,8 @@ def plain_file(**kwargs):
 
 def pkg_installed(**kwargs):
     zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
     _call_state('pkg.installed', zz, ret)
     return ret
 
@@ -266,6 +302,8 @@ def _debug(fmt, *args, **kwargs):
 def _docker_container_args(kwargs):
     # Called from multiple places so hardwire caller
     zz, ret = _state_init(kwargs, caller='docker_container')
+    if not ret['result']:
+        return zz, ret
     #TODO: args need to be sanitized (safe_name with spaces for env)
     zz['service_name'] = zz['container_name']
     start = '{program} run --tty --name {container_name}'.format(**zz)
@@ -331,7 +369,6 @@ def _docker_container_args_pairs(zz):
 def _docker_container_init(zz, ret):
     if not (ret['result'] and 'init' in zz):
         return ret
-    _debug(zz)
     for r in 'sentinel', 'cmd':
         if not r in zz['init']:
             raise ValueError('init.{} required'.format(r))
@@ -358,6 +395,9 @@ def _docker_container_init_args(zz):
     del orig_zz['init']
     _docker_container_init_args_defaults(zz, orig_zz)
     # Parse the original values before inserting flag pairs
+    # ASSUMES: _state_init() is called, but shouldn't fail
+    # because this it has already been called for this low state.
+    # See _init_before_first_state() and minion_update()
     zz, _ = _docker_container_args(zz)
     _docker_container_init_args_pairs(zz, orig_zz)
     # Second time is to prepare "start" after we fix up flag pairs
@@ -417,6 +457,26 @@ def _host_user_uid(zz, ret):
     _sh('usermod -u {uid} {user_name}'.format(**zz), ret)
     _sh('groupmod -g {uid} {user_name}'.format(**zz), ret)
     _sh('chgrp -R {user_name} {pw_dir}'.format(pw_dir=u.pw_dir, **zz), ret)
+
+
+def _init_before_first_state():
+    global _initialized
+    if _initialized:
+        return
+    global _inventory, _log
+    _initialized = True
+    _log = logging.getLogger(__name__)
+    assert not __opts__['test'], 'test mode not supported'
+    now = datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')
+    _inventory = _pillar(caller='mod_init', key='inventory').format(now=now)
+    # The _inv() call in _call_state() happens after the
+    # call to the state so it's safe to do this. This
+    # handles the makedirs properly.
+    d = os.path.dirname(_inventory)
+    if not os.path.exists(d):
+        os.makedirs(d)
+    _inv({'start': now})
+    return _call_state('minion_update', {}, _ret_init({'name': 'mod_init'}))
 
 
 def _inv(kwargs, ret=None):
@@ -572,6 +632,9 @@ def _sh(cmd, ret, ignore_errors=False):
 
 
 def _state_init(kwargs, caller=None):
+    ret = _init_before_first_state()
+    if ret and not ret['result']:
+        return None, ret
     _debug('low={}', __lowstate__)
     zz = copy.deepcopy(kwargs)
     for k, v in _pillar(caller=caller or _caller()).iteritems():

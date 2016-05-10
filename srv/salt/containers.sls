@@ -10,16 +10,6 @@
     postgresql_data_d=zz.postgresql_home_d + '/data'
 ) %}
 
-base_pkgs:
-  bivio.pkg_installed:
-    - pkgs:
-      - docker
-      - emacs-nox
-      - lsof
-      - screen
-      - tar
-      - telnet
-
 postgresql_jupyterhub_container:
   bivio.docker_container:
     - container_name: postgresql_jupyterhub

@@ -61,12 +61,18 @@ bivio:
       allow svirt_lxc_net_t docker_var_run_t:sock_file write;
 {% endraw %}
 
+  file_append: {}
+
   host_user:
     docker_gid: 496
     docker_group: "{{ zz.docker_group }}"
     uid: 1000
     user_name: "{{ zz.user }}"
     want_docker_sock: True
+
+  minion_update:
+    config_name: '/etc/minion/minion.d/99-bivio.conf'
+    config_source: 'salt://minion/99-bivio.conf'
 
   mod_init:
     inventory: '/var/lib/bivio-salt/inventory/{now}.yml'
@@ -87,3 +93,13 @@ bivio:
     user: "{{ zz.user }}"
 
   pkg_installed: {}
+
+file_client: local
+strip_colors: True
+color: False
+user: vagrant
+log_file: /dev/null
+key_logfile: /dev/null
+log_level: debug
+states_dirs: [/srv/salt/_states]
+failhard: True
