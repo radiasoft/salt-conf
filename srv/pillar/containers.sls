@@ -1,9 +1,7 @@
+# Use secret.py to generate values required for salt/containers.sls
 jupyterhub:
-  db_pass: ''
-  cookie_secret: ''
-  proxy_auth_token: ''
-  github_client_id: ''
-  github_client_secret: ''
+  host_name: localhost
+  host_port: 8000
 {% raw %}
   config_contents: |
     c.Authenticator.admin_users = {'{{ pillar.jupyterhub.admin_user }}',}
@@ -14,7 +12,7 @@ jupyterhub:
     c.JupyterHub.proxy_auth_token = '{{ pillar.jupyterhub.proxy_auth_token }}'
     # Allow both local and GitHub users; Useful for bootstrap
     c.JupyterHub.authenticator_class = 'oauthenticator.GitHubOAuthenticator'
-    c.GitHubOAuthenticator.oauth_callback_url = 'https://jupyter.radiasoft.org/hub/oauth_callback'
+    c.GitHubOAuthenticator.oauth_callback_url = '{{ pillar.jupyterhub.host_name }}/hub/oauth_callback'
     c.GitHubOAuthenticator.client_id = '{{ pillar.jupyterhub.github_client_id }}'
     c.GitHubOAuthenticator.client_secret = '{{ pillar.jupyterhub.github_client_secret }}'
     c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
@@ -23,6 +21,3 @@ jupyterhub:
     c.JupyterHub.hub_ip = public_ips()[0]
     c.DockerSpawner.container_image = '{{ zz.jupyter_image }}'
 {% endraw %}
-
-postgresql:
-  admin_pass: Pu2GZICpiAfguOQ

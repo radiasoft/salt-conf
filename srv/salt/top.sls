@@ -1,3 +1,3 @@
 base:
   '*':
-    - bcm
+    - test

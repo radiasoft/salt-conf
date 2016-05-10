@@ -1,7 +1,7 @@
 {% set zz = dict(
     user='vagrant',
-    file_mode='440',
-    dir_mode='750',
+    file_mode='400',
+    dir_mode='700',
     docker_group='docker',
     docker_sock='/run/docker.sock',
 ) %}

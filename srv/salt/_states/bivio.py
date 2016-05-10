@@ -84,6 +84,7 @@ def docker_image(**kwargs):
     if not ret['result']:
         return ret
     i = zz['image_name']
+    _assert_name(i)
     if not ':' in i:
         i += ':' + _assert_name(__pillar__['pykern']['channel'])
     exists, ret = _docker_image_exists(i, ret)
@@ -150,6 +151,7 @@ def docker_sock_semodule(**kwargs):
 
 def host_user(**kwargs):
     zz, ret = _state_init(kwargs)
+    _assert_name(zz['user_name'])
     _host_user_uid(zz, ret)
     _call_state('group.present', {'name': zz['user_name'], 'gid': zz['uid']}, ret)
     _call_state('group.present', {'name': zz['docker_group'], 'gid': zz['docker_gid']}, ret)
@@ -268,6 +270,7 @@ def _docker_container_args(kwargs):
     zz['service_name'] = zz['container_name']
     start = '{program} run --tty --name {container_name}'.format(**zz)
     guest_user = zz.get('guest_user')
+    _assert_name(guest_user)
     if guest_user:
         start += ' -u ' + guest_user
     start += _docker_container_args_pairs(zz)
@@ -299,7 +302,9 @@ def _docker_container_args_pairs(zz):
         elif len(e) < 2:
             # will fail for len=0
             e = (e[0], e[0])
-        return map(str, e)
+        e = map(str, e)
+        map(_assert_name, e)
+        return e
 
     args = ''
     for key, flag in _DOCKER_FLAG_PAIRS.iteritems():
@@ -326,6 +331,7 @@ def _docker_container_args_pairs(zz):
 def _docker_container_init(zz, ret):
     if not (ret['result'] and 'init' in zz):
         return ret
+    _debug(zz)
     for r in 'sentinel', 'cmd':
         if not r in zz['init']:
             raise ValueError('init.{} required'.format(r))
