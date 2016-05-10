@@ -1,3 +1,15 @@
+{%
+    set zz = dict(
+        juypter_singleuser_image='radiasoft/jupyter:' + pillar.pykern_channel,
+        jupyterhub_host_conf_d='/var/lib/jupyterhub/conf',
+        postgresql_home_d='/var/lib/postgresql-jupyterhub',
+        jupyterhub_guest_conf_d='/srv/jupyterhub/conf',
+        jupyterhub_config_f='jupyterhub_config.py',
+    )
+    zz['postgresql_data_d'] = zz['postgresql_home_d'] + '/data'
+
+%}
+
 base_pkgs:
   bivio.pkg_installed:
     pkgs:
@@ -8,47 +20,50 @@ base_pkgs:
       - tar
       - telnet
 
-postgresql_container:
+postgresql_jupyterhub_container:
   bivio.docker_container:
-    - container_name: postgresql
-    - image_name: radiasoft/postgres
+    - container_name: postgresql_jupyterhub
+    - image_name: radiasoft/postgresql-jupyterhub
     - volumes:
-      - /var/lib/postgresql/data
-      - [ /var/lib/postgresql/run, /run/postgresql ]
+      - [ {{ zz.postgresql_data_d }}, /var/lib/postgresql/data ]]
+      - [ {{ zz.postgresql_home_d }}/run, /run/postgresql ]
     - user: postgres
     - ports:
       - [ 5432 5432 ]
     - init:
       env:
-        - [ POSTGRES_PASSWORD, {{ postgres.admin_pass }} ]
+        - [ POSTGRES_PASSWORD, {{ postgresql.admin_pass }} ]
         - [ JPY_PSQL_PASSWORD, {{ jupyterhub.db_pass }} ]
       cmd: /radia-init.sh
-      sentinel: /var/lib/postgresql/data/PG_VERSION
+      sentinel: {{ zz.postgresql_data_d }}/PG_VERSION
 
-jupyter_singleuser:
+jupyter_singleuser_image:
   bivio.docker_image:
-    - name: radiasoft/jupyter-singleuser
+    - image_name: {{ zz.jupyter_singleuser_image }}
 
 jupyterhub_config:
   bivio.plain_file:
-    - name: /var/lib/jupyterhub/conf/jupyterhub_config.py
-    - user: {{ pillar.docker_container_user }}
+    - file_name: {{ zz.jupyterhub_host_conf_d }}/{{ zz.jupyterhub_config_f }}
+    - contents_pillar: {{ pillar.jupyterhub.config_contents }}
+    - zz:
+        jupyter_image: {{ zz.jupyter_singleuser_image }}
 
-jupyterhub:
+jupyterhub_container:
   bivio.docker_container:
-    - image: radiasoft/jupyterhub
+    - container_name: jupyterhub
+    - image_name: radiasoft/jupyterhub
     - links:
-        - postgresql
+        - postgresql_jupyterhub
     - want_docker_sock: True
     - volumes:
-        - [ /var/lib/jupyterhub/conf, /srv/jupyterhub/conf ]
+        - [ {{ zz.jupyterhub_host_conf_d }}, {{ zz.jupyterhub_guest_conf_d }} ]
     - user: root
     - ports:
         - [ 5692, 8000 ]
-    - cmd: jupyterhub -f /srv/jupyterhub/conf/jupyter_config.py
+    - cmd: jupyterhub -f {{ zz.jupyterhub_guest_conf_d }}/{{ zz.jupyterhub_config_f }}
     - after:
         - postgresql
     - require:
-        - bivio.postgresql
-        - bivio.jupyter_singleuser
+        - bivio.postgresql_jupyterhub_container
+        - bivio.jupyter_singleuser_image
         - bivio.jupyterhub_config

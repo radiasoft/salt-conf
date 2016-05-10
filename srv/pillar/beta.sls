@@ -1,1 +1,2 @@
-channel: beta
+pykern:
+  channel: beta

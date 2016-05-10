@@ -55,6 +55,9 @@ def docker_container(**kwargs):
             'name': zz['service_name'] + '.systemd_file',
             'file_name': zz['systemd_filename'].format(**zz),
             'contents': zz['systemd_contents'],
+            'user': 'root',
+            'group': 'root',
+            'mode': '550',
             'zz': zz,
         },
         ret,
@@ -82,7 +85,7 @@ def docker_image(**kwargs):
         return ret
     i = zz['image_name']
     if not ':' in i:
-        i += ':' + _assert_name(__pillar__['channel'])
+        i += ':' + _assert_name(__pillar__['pykern']['channel'])
     exists, ret = _docker_image_exists(i, ret)
     if not ret['result']:
         return ret
@@ -133,6 +136,9 @@ def docker_sock_semodule(**kwargs):
                 'name': 'docker_sock_semodule.policy_template',
                 'file_name': os.path.join(d, 'tmp.te'),
                 'contents': zz['contents'],
+                'user': 'root',
+                'group': 'root',
+                'mode': '550',
             },
             ret,
         )
