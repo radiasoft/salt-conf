@@ -1,3 +1,3 @@
 base:
   '*':
-    - {{ grains.fqdn }}
+    - {{ grains.fqdn|replace(".", "_") }}
