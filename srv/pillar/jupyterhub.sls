@@ -20,7 +20,7 @@ jupyterhub:
     c.JupyterHub.proxy_auth_token = '{{ pillar.jupyterhub.proxy_auth_token }}'
     # Allow both local and GitHub users; Useful for bootstrap
     c.JupyterHub.authenticator_class = 'oauthenticator.GitHubOAuthenticator'
-    c.GitHubOAuthenticator.oauth_callback_url = '{{ pillar.jupyterhub.host_name }}/hub/oauth_callback'
+    c.GitHubOAuthenticator.oauth_callback_url = 'https://{{ pillar.jupyterhub.host_name }}/hub/oauth_callback'
     c.GitHubOAuthenticator.client_id = '{{ pillar.jupyterhub.github_client_id }}'
     c.GitHubOAuthenticator.client_secret = '{{ pillar.jupyterhub.github_client_secret }}'
     c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
