@@ -2,7 +2,7 @@
 bivio:
   state_trees:
     jupyterhub:
-      include: False
+      include: True
       require:
         - utilities
 
