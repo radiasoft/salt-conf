@@ -6,6 +6,8 @@
 * Avoid setting values in states that can't be overriden by pillars
 * Do not use files unless absolutely necessary. You can't override files or states,
   but you can override pillars with more qualified config.
+* "ret" is checked before operations, e.g. call_state, so that if there's
+  an error, it won't execute. Makes it easier to chain commands.
 """
 import contextlib
 import copy
@@ -53,6 +55,7 @@ def docker_container(**kwargs):
     if not ret['result']:
         return ret
     _call_state('docker_image', {'name': zz['name'] + '.image', 'image_name': zz['image_name']}, ret)
+    _call_state('docker_sock_semodule', {}, ret)
     _call_state(
         'plain_file',
         {
@@ -141,21 +144,25 @@ def docker_sock_semodule(**kwargs):
     if modules is None or zz['policy_name'] in modules:
         return ret
     with _temp_dir() as d:
+        pn = zz['policy_name']
         _call_state(
             'plain_file',
             {
                 'name': 'docker_sock_semodule.policy_template',
-                'file_name': os.path.join(d, 'tmp.te'),
+                'file_name': os.path.join(d, pn + '.te'),
                 'contents': zz['contents'],
-                'user': 'root',
-                'group': 'root',
-                'mode': '550',
+                'zz': zz,
             },
             ret,
         )
-        _sh('checkmodule -M -m tmp.te -o tmp.mod', ret)
-        _sh('semodule_package -m tmp.mod -o tmp.pp', ret)
-        _sh('semodule -i tmp.pp', ret)
+        # must be the name of the file
+        for cmd in (
+            'checkmodule -M -m {pn}.te -o {pn}.mod',
+            'semodule_package -m {pn}.mod -o {pn}.pp',
+            # will exit -9 (out of memory) when there is "only" 256MB of RAM
+            'semodule -i {pn}.pp',
+        ):
+            _sh(cmd.format(pn=pn), ret)
     return ret
 
 
