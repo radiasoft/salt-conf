@@ -51,7 +51,8 @@ bivio:
       - lvm2
 
   docker_sock_semodule:
-    policy_name: bivio_docker_sock
+    # policy names seem to be alphanum only
+    policy_name: biviodockersock
 {% raw %}
     contents: |
       module {{ zz.policy_name }} 1.0;
