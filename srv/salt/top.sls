@@ -1,6 +1,10 @@
 #!py
 # -*-python-*-
-
+#
+# State tree files are related to each other. This module
+# allows you to organize them that way using pillars
+# to drive the state tree files to be run.
+#
 def run():
     """Include bivio:state_trees in the order they need to run.
 
@@ -41,6 +45,8 @@ def _toposort(todo):
             assert done[node], '{}: not a DAG'.format(node)
             return
         done[node] = False
+        if not node in todo:
+            raise ValueError('{} is a dependency so must be included'.format(edge))
         for edge in todo[node]:
             _visit(edge)
         done[node] = True

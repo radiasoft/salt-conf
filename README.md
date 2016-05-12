@@ -1,3 +1,114 @@
 ### Salt Master Configuration
 
-[Some documentation in utilities.wiki](https://github.com/biviosoftware/utilities/wiki)
+Currently, we only support Fedora 23.
+
+#### Bootstrapping a Minion
+
+Run:
+
+```bash
+curl radia.run | bash -s salt <master>
+```
+
+This will load the development version of Salt on the minion. There
+are too many bugs in previous versions.
+
+#### Installing the Master
+
+The docker instance [is configured here](https://github.com/radiasoft/containers/tree/master/radiasoft/salt-master).
+
+There is no automatic installer. The configuration lives in a
+private repo for now. We'll eventually configure the master
+from this repo.
+
+#### Organization
+
+This Salt repository is organized differently from others. All the
+configuration, including which state trees to load, is driven off
+pillars, using
+[pillar.stack](https://github.com/saltstack/salt/blob/develop/salt/pillar/stack.py).
+
+Each machine (minion) is described as a "system", which is a
+complete list of what is installed. You should therefore start
+with the
+[systems directory](srv/pillar/systems). The minions directory
+contains a symlink per "minion_id", which links to
+one fo the `../systems/<type>-<channel>.cfg` files.
+
+A systems file is a top level `pillar.stack` configuration,
+which is a list of file names, relative to `/srv/pillar`.
+Here's what `systems/jupyterhub-dev.cfg` looks like:
+
+```text
+channel/dev.yml
+bivio.yml
+jupyterhub/base.yml
+jupyterhub/secret-slug-dev.yml
+```
+
+The first entry classifies the system according to its channel
+(development pipeline stage). The next line configures the basic
+bivio pillar configuration. The subsequent lines describe aspects
+of the system. In this case, we configure the dev box
+with the jupyterhub subsystem.
+
+The last line is a slug for the secret file,
+which isn't checked in for alpha, beta, or prod, as they
+may be publicly accessible. It's convenient to have default
+secret configuration so we provide host in `secret-slug` files.
+
+#### State Tree Selectors
+
+Every subsystem contains a pillar of the form:
+
+```yaml
+bivio:
+  state_trees:
+    jupyterhub:
+      include: True
+      require:
+        - utilities
+```
+
+This is a state tree selector. Normally, states are configured in
+Salt, but this is inconvenient for large subsystems. Rather, we
+configure which subsystems are used, and what their dependencies are.
+
+In this example, the `jupyterhub` state tree will be run.
+It requires `utilities`, which is another state tree, which
+must be run first.
+
+You can selectively control whether subsystems are included
+by modifying the `include` attribute of the subsystem. This
+can be useful.
+
+#### srv/salt/top.sls
+
+The [top file](srv/salt/top.sls)
+looks for the `bivio:state_trees` pillar, and
+sorts the dependencies using a toposort. It then returns
+the list of state trees to be execute by salt for this
+minion.
+
+#### srv/salt/_states/bivio.py
+
+All states go through `bivio.py`, which defines a set of
+higher level abstractions based on Bivio's policies. This
+simplifies the state tree by consolidating dependencies.
+For example, most system services are configured with
+docker containers so the state `bivio.docker_container`
+encapsulates the entire process of pulling the image,
+configuring the container, and managing the systemd
+service.
+
+The other problem which `bivio.py` solves is to
+document what is actually installed on the system,
+not just what is described by the current salt
+state trees and pillars. All bivio states document
+their actions in files in `/var/lib/bivio-salt/inventory`
+on the minion. Eventually, the inventory will contain
+all actions to undo the actual state of the system.
+
+#### References
+
+[General discussion in Utilities Wiki.](https://github.com/biviosoftware/utilities/wiki/Salt)

@@ -23,3 +23,10 @@ jupyterhub:
   proxy_auth_token: $proxy_auth_token
 EOF
 fi
+
+
+TODO: /etc/salt/master.d/vagrant.conf
+
+pidfile: /srv/salt-master.pid
+log_level: debug
+log_level_logfile: debug

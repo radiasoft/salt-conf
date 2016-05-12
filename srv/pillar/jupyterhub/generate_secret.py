@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Generate secrets for test purposes.
+# -*- coding: utf-8 -*-
+u"""Generate secrets for test purposes.
 
 You will need to get real values for:
 
@@ -9,12 +10,18 @@ You will need to get real values for:
 
 The rest can be generated this way for production::
 
-    admin_user=xyz github_client_secret=x github_client_id=x python secret.py
+    admin_users=xyz github_client_secret=x github_client_id=x python secret.py
 
-You can override any values in the environment:
+You can override any values in the environment.
+
+Note that admin_users will be split on spaces, because it is a
+list.
+
+:copyright: Copyright (c) 2016 RadiaSoft LLC.  All Rights Reserved.
+:license: http://www.apache.org/licenses/LICENSE-2.0.html
 """
+from __future__ import absolute_import, division, print_function
 import base64
-import binascii
 import os
 import random
 import string
@@ -24,12 +31,13 @@ import sys
 def main():
     cfg = _environ_override({
         'jupyterhub': {
-            'admin_user': 'github_user_name',
+            'admin_users': ['vagrant'],
+            'authenticator_class': 'jupyterhub.auth.PAMAuthenticator',
             'cookie_secret': base64.b64encode(os.urandom(64)),
-            'proxy_auth_token': base64.b64encode(os.urandom(32)),
-            'github_client_id': binascii.hexlify(os.urandom(10)),
-            'github_client_secret': binascii.hexlify(os.urandom(20)),
             'db_pass': _random_password(),
+            'github_client_id': 'replace_me',
+            'github_client_secret': 'replace_me',
+            'proxy_auth_token': base64.b64encode(os.urandom(32)),
         },
         'postgresql_jupyterhub': {
             'admin_pass': _random_password(),
@@ -43,7 +51,7 @@ def _environ_override(cfg):
         for k in c:
             v = os.environ.get(k)
             if v:
-                c[k] = v
+                c[k] = v.split(None) if k == 'admin_users' else v
     return cfg
 
 
