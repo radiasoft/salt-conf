@@ -181,14 +181,14 @@ def host_user(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
-    _assert_name(zz['user_name'])
+    _assert_name(zz['user'])
     _host_user_uid(zz, ret)
-    _call_state('group.present', {'name': zz['user_name'], 'gid': zz['uid']}, ret)
+    _call_state('group.present', {'name': zz['user'], 'gid': zz['uid']}, ret)
     _call_state('group.present', {'name': zz['docker_group'], 'gid': zz['docker_gid']}, ret)
     _call_state(
         'user.present',
         {
-            'name': zz['user_name'],
+            'name': zz['user'],
             'uid': zz['uid'],
             'gid': zz['uid'],
             'groups': [zz['docker_group']],
@@ -313,7 +313,7 @@ def _docker_container_args(kwargs):
         return zz, ret
     #TODO: args need to be sanitized (safe_name with spaces for env)
     zz['service_name'] = zz['container_name']
-    start = '{program} run --tty --name {container_name}'.format(**zz)
+    start = '{program} run --tty --log-driver=journald --name {container_name}'.format(**zz)
     guest_user = zz.get('guest_user')
     _assert_name(guest_user)
     if guest_user:
@@ -454,16 +454,16 @@ def _host_user_uid(zz, ret):
     as vagrant.
     """
     try:
-        u = pwd.getpwnam(zz['user_name'])
+        u = pwd.getpwnam(zz['user'])
         if u.pw_uid == zz['uid']:
             return
     except KeyError:
         # User doesn't exist, which is fine (non-Vagrant Fedora install)
         return
     # Need to fix; Something that user.present can't do
-    _sh('usermod -u {uid} {user_name}'.format(**zz), ret)
-    _sh('groupmod -g {uid} {user_name}'.format(**zz), ret)
-    _sh('chgrp -R {user_name} {pw_dir}'.format(pw_dir=u.pw_dir, **zz), ret)
+    _sh('usermod -u {uid} {user}'.format(**zz), ret)
+    _sh('groupmod -g {uid} {user}'.format(**zz), ret)
+    _sh('chgrp -R {user} {pw_dir}'.format(pw_dir=u.pw_dir, **zz), ret)
 
 
 def _init_before_first_state():

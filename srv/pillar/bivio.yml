@@ -73,7 +73,7 @@ bivio:
     docker_gid: 496
     docker_group: "{{ zz.docker_group }}"
     uid: 1000
-    user_name: "{{ zz.user }}"
+    user: "{{ zz.user }}"
     want_docker_sock: True
 
   minion_update:

@@ -11,15 +11,11 @@ file_ignore_glob:
   - '.#*'
 file_ignore_regex:
   - '/\.git($|/)'
-{#
-file_roots:
-  base:
-    - /srv/salt
-#}
 hash_type: sha256
 log_level: quiet
 log_level_logfile: info
 max_open_files: 4096
 pillar_cache: False
 strip_colors: True
+timeout: 60
 user: vagrant

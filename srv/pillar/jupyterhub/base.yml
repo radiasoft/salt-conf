@@ -41,3 +41,6 @@ jupyterhub:
         c.LocalProcessSpawner.debug = True
     {{ pillar.jupyterhub.aux_contents }}
 {% endraw %}
+
+
+#    c.DockerSpawner.volumes = {}

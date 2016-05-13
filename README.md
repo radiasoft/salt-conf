@@ -149,6 +149,7 @@ pidfile: /tmp/salt-master.pid
 log_level: debug
 log_level_logfile: debug
 EOF
+ln -s ../systems/jupyterhub-dev.cfg /srv/srv/pillar/minions/v3
 ```
 
 Start the master in an emacs window:
@@ -181,7 +182,18 @@ Then on the master:
 
 ```bash
 salt-key -y -a v3
+salt v3 state.apply
+# This will restart the minion b/c salt config changed, then again with
+# a long timeout, because this pulls the initial docker images:
+salt v3 --timeout=300 state.apply
 ```
+
+To reinstall the minion, you'll need to delete the key before the curl install:
+
+```bash
+salt-key -y -d v3
+```
+
 
 Executing on the minion gives more information, as root:
 
