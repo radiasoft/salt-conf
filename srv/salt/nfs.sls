@@ -1,3 +1,7 @@
+nfs_volume:
+  server_dir: apa11b.bivio.biz:/home
+  mount_point: /var/nfs/apa11/home:
+
 /var/nfs/apa11/home:
   pkg.installed:
     - pkgs:

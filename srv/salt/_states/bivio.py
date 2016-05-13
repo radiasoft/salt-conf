@@ -229,6 +229,41 @@ def minion_update(**kwargs):
     )
 
 
+def nfs_mount(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    _call_state(
+        'pkg_installed',
+        {
+            'name': 'nfs_mount.pkgs',
+            'pkgs': ['nfs-utils'],
+        },
+        ret,
+    )
+    _call_state(
+        'plain_directory',
+        {
+            'name': 'nfs_mount.' + zz['local_dir'],
+            'dir_name': zz['local_dir'],
+            'user': root,
+            'group': root,
+            'mode': '755',
+        },
+    )
+    _call_state(
+        'file_append',
+        {
+            'file_name': '/etc/fstab',
+            'text': '{} {} nfs nolock'.format(zz['remote_dir'], zz['local_dir']),
+        },
+        ret,
+    )
+    if ret['result'] && ret['changes']:
+        _sh('mount -o remount {}'.format(zz['local_dir']), ret)
+    return ret
+
+
 def plain_directory(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:

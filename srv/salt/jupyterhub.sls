@@ -44,6 +44,13 @@ jupyterhub_config:
     - zz:
         jupyter_image: {{ zz.jupyter_singleuser_image }}
 
+{% if pillar.juypterhub.nfs_local_d %}
+jupyterhub_nfs:
+  bivio.nfs_mount:
+    - local_dir: "{{ pillar.jupyterhub.nfs_local_d }}"
+    - remote_dir: "{{ pillar.jupyterhub.nfs_local_d }}"
+{% endif %}
+
 jupyterhub_container:
   bivio.docker_container:
     - after:
