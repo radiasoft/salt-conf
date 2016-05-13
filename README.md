@@ -109,6 +109,86 @@ their actions in files in `/var/lib/bivio-salt/inventory`
 on the minion. Eventually, the inventory will contain
 all actions to undo the actual state of the system.
 
+#### Development
+
+#### Master
+
+Vagrantfile for the master:
+
+```ruby
+Vagrant.configure(2) do |config|
+  config.vm.box = "fedora-23"
+  config.vm.hostname = 'v1'
+  config.vm.network "private_network", ip: "10.10.10.10"
+  config.vm.synced_folder ".", "/vagrant", type: "virtualbox", disabled: true
+  config.vbguest.auto_update = false
+end
+```
+
+I work right out of `/srv`. As root install the master:
+
+```bash
+# See ~/src/radiasoft/containers/radiasoft/salt-master/build.sh
+curl salt.run | bash -s -- -P -M -X -N -d -Z -n git develop
+mkdir -p /var/{log,cache}/salt /srv
+chown -R vagrant:vagrant /etc/salt /var/{log,cache}/salt /srv
+```
+
+As vagrant:
+
+```bash
+cd /srv
+git clone https://github.com/biviosoftware/salt-conf
+mv salt-conf/{.??*,*} .
+rmdir salt-conf
+ln -s srv/salt srv/pillar .
+rm /etc/salt/master
+ln -s /srv/etc/master /etc/salt
+cat <<'EOF' > /etc/salt/master.d/vagrant.conf
+pidfile: /tmp/salt-master.pid
+log_level: debug
+log_level_logfile: debug
+EOF
+```
+
+Start the master in an emacs window:
+
+```bash
+salt-master -l debug
+```
+
+#### Minion
+
+Vagrantfile for the minion:
+
+```ruby
+Vagrant.configure(2) do |config|
+  config.vm.box = "fedora-23"
+  config.vm.hostname = 'v3'
+  config.vm.network "private_network", ip: "10.10.10.30"
+  config.vm.synced_folder ".", "/vagrant", type: "virtualbox", disabled: true
+  config.vbguest.auto_update = false
+end
+```
+
+Installing:
+
+```bash
+curl radia.run | bash -s salt 10.10.10.10
+```
+
+Then on the master:
+
+```bash
+salt-key -y -a v3
+```
+
+Executing on the minion gives more information, as root:
+
+```bash
+salt-call -l debug state.apply 2>&1 | tee err
+```
+
 #### References
 
 [General discussion in Utilities Wiki.](https://github.com/biviosoftware/utilities/wiki/Salt)
