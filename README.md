@@ -128,10 +128,7 @@ end
 I work right out of `/srv`. As root install the master:
 
 ```bash
-# See ~/src/radiasoft/containers/radiasoft/salt-master/build.sh
-curl salt.run | bash -s -- -P -M -X -N -d -Z -n git develop
-mkdir -p /var/{log,cache}/salt /srv
-chown -R vagrant:vagrant /etc/salt /var/{log,cache}/salt /srv
+bash init.sh
 ```
 
 As vagrant:
@@ -152,10 +149,10 @@ EOF
 ln -s ../systems/jupyterhub-dev.cfg /srv/srv/pillar/minions/v3
 ```
 
-Start the master in an emacs window:
+Start the master in an emacs window or screen:
 
 ```bash
-salt-master -l debug
+salt-master
 ```
 
 #### Minion
@@ -172,10 +169,10 @@ Vagrant.configure(2) do |config|
 end
 ```
 
-Installing:
+Installing minion as root:
 
 ```bash
-curl radia.run | bash -s salt 10.10.10.10
+curl radia.run | sudo bash -s salt 10.10.10.10
 ```
 
 Then on the master:

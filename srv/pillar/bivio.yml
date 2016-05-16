@@ -1,3 +1,6 @@
+#
+# Base _states/bivio.py configuration
+#
 {% set zz = dict(
     user='vagrant',
     file_mode='400',

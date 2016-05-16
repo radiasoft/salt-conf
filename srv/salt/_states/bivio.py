@@ -259,7 +259,7 @@ def nfs_mount(**kwargs):
         },
         ret,
     )
-    if ret['result'] && ret['changes']:
+    if ret['result'] and ret['changes']:
         _sh('mount -o remount {}'.format(zz['local_dir']), ret)
     return ret
 

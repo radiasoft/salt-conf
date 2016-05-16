@@ -1,32 +1,31 @@
 #!/bin/bash
 #
-# Run once
 #
-f=srv/pillar/apa20b.sls
-rand_base64() {
-    openssl rand -base64 "$1" | tr -d \\n
-}
-
-if [[ ! -f $f ]]; then
-    # tornado.web._create_signature_v2 uses sha256 so need 256 bits max (32 bytes):
-    # https://tools.ietf.org/html/rfc4868#section-2.1.1
-    cookie_secret=$(rand_base64 32)
-    # This is passed around verbatim so just a long key (not decoded) that can fit
-    # In the "Authorization: token $proxy_auth_token" header.
-    proxy_auth_token=$(rand_base64 64)
-    echo -n 'admin_user: '
-    read admin_user
-    cat <<EOF > "$f"
-jupyterhub:
-  admin_user: $admin_user
-  cookie_secret: $cookie_secret
-  proxy_auth_token: $proxy_auth_token
+cd "$(dirname "$0")"
+if [[ -z $(type -t salt-master) ]]; then
+    echo "Installing salt-master..." 1>&2
+    curl salt.run | bash -s -- -P -M -X -N -d -Z -n git develop
+fi
+echo "Starting salt-master: $PWD" 1>&2
+mkdir -p run/{etc/salt/{master.d,pki},var/cache/salt,var/log/salt,run/salt}
+if [[ ! -L run/etc/salt/master ]]; then
+    ln -s ../../../etc/master run/etc/salt/master
+if
+if [[ ! -L run/srv ]]; then
+    ln -s ../../srv run/srv
+if
+if [[ ! -r run/etc/salt/master.d/bivio-vagrant.conf ]]; then
+    cat > run/etc/salt/master.d/bivio-vagrant.conf <<"EOF"
+auto_accept: true
+base:
+  - "$PWD/srv/salt"
+log_level: debug
+log_level_logfile: quiet
+pillar_roots:
+  base:
+  - "$PWD/srv/pillar"
+root_dir: "$PWD/run"
+user: $USER
 EOF
 fi
-
-
-TODO: /etc/salt/master.d/vagrant.conf
-
-pidfile: /srv/salt-master.pid
-log_level: debug
-log_level_logfile: debug
+exec salt-master -c "$PWD/run/etc/salt"

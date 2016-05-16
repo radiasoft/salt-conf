@@ -3,7 +3,16 @@
 #
 # Use jupyterh_secret.py to generate passwords and (fake) OAuth keys
 #
-#
+{% set zz = dict(
+    jupyterhub_conf_f='jupyterhub_config.py',
+    jupyterhub_guest_conf_d='/srv/jupyterhub/conf',
+    jupyterhub_host_conf_d='/var/lib/jupyterhub/conf',
+    postgresql_name='postgresql-jupyterhub'
+) %}
+{% set _dummy = zz.update(
+    postgresql_host_home_d='/var/lib/' + zz.postgresql_name,
+) %}
+
 bivio:
   state_trees:
     jupyterhub:
@@ -11,26 +20,23 @@ bivio:
       require:
         - utilities
 
-
 jupyterhub:
-  host_name: localhost
-  host_port: 8000
-  debug: true
   authenticator_class: oauthenticator.GitHubOAuthenticator
   aux_contents: ""
 {% raw %}
-  config_contents: |
+  conf_contents: |
     import base64, os
-    dockerspanwer
+    from dockerspawner import DockerSpawner
     from jupyter_client.localinterfaces import public_ips
 
     c.Authenticator.admin_users = set(['{{ pillar.jupyterhub.admin_users|join("', '") }}'])
-    c.DockerSpawner.container_image = '{{ zz.jupyter_image }}'
+    c.DockerSpawner.container_image = '{{ pillar.jupyterhub.jupyter_singleuser_image }}'
     c.DockerSpawner.use_internal_ip = True
-    {% if pillar jupyterhub.root_notebook_d %}
+    {% if pillar.jupyterhub.root_notebook_d %}
     c.DockerSpawner.volumes = {
         '{{ pillar.jupyterhub.root_notebook_d }}/{username}': {
-            'bind': '{{ pillar.jupyterhub.notebook_d }}',
+             # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
+            'bind': '/home/{{ pillar.jupyterhub.jupyter_guest_user }}/jupyter',
             'mode': 'Z',
         },
     }
@@ -43,8 +49,9 @@ jupyterhub:
     c.JupyterHub.cookie_secret = base64.b64decode('{{ pillar.jupyterhub.cookie_secret }}')
     c.JupyterHub.hub_ip = public_ips()[0]
     c.JupyterHub.ip = '0.0.0.0'
+    c.JupyterHub.port = {{ pillar.jupyterhub.guest_port }}
     c.JupyterHub.proxy_auth_token = '{{ pillar.jupyterhub.proxy_auth_token }}'
-    c.JupyterHub.spawner_class = dockerspawner.DockerSpawner
+    c.JupyterHub.spawner_class = DockerSpawner
     {% if pillar.jupyterhub.debug %}
     c.JupyterHub.log_level = 'DEBUG'
     c.Spawner.debug = True
@@ -52,6 +59,26 @@ jupyterhub:
     {% endif %}
     {{ pillar.jupyterhub.aux_contents }}
 {% endraw %}
-
-
-#    c.DockerSpawner.volumes = {}
+  debug: true
+  guest_conf_d: '{{ zz.jupyterhub_guest_conf_d }}'
+  guest_conf_f: '{{ zz.jupyterhub_guest_conf_d }}/{{ zz.jupyterhub_conf_f }}'
+  guest_port: 8000
+  guest_user: root
+  host_conf_d: '{{ zz.jupyterhub_host_conf_d }}'
+  host_conf_f: '{{ zz.jupyterhub_host_conf_d }}/{{ zz.jupyterhub_conf_f }}'
+  host_name: localhost
+  host_port: 8000
+  host_user: root
+  image_name: radiasoft/jupyterhub
+  jupyter_guest_user: '{{ pillar.bivio.docker_container.guest_user }}'
+  jupyter_host_user: '{{ pillar.bivio.docker_container.host_user }}'
+  # PIVOT: _states/bivio.py assumes pykern.channel
+  jupyter_singleuser_image: 'radiasoft/beamsim-jupyter:{{ pillar.pykern.channel }}'
+  nfs_local_d: ''
+  nfs_remote_d: ''
+  postgresql_host_data_d: '{{ zz.postgresql_host_home_d }}/data'
+  postgresql_host_home_d: '{{ zz.postgresql_host_home_d }}'
+  postgresql_host_run_d: '{{ zz.postgresql_host_home_d }}/run'
+  postgresql_image: 'radiasoft/{{ zz.postgresql_name }}'
+  postgresql_name: '{{ zz.postgresql_name }}'
+  root_notebook_d: ''
