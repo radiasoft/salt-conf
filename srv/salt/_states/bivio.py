@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 
 * Do not rely on 'name', be explicit: service_name, image_name, etc.
@@ -9,6 +10,8 @@
 * "ret" is checked before operations, e.g. call_state, so that if there's
   an error, it won't execute. Makes it easier to chain commands.
 """
+from __future__ import absolute_import, division, print_function
+
 import contextlib
 import copy
 import datetime
@@ -203,18 +206,22 @@ def minion_update(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
-    _call_state(
-        'plain_file',
-        {
-            'name': 'minion.config',
-            'file_name': zz['config_name'],
-            'source': zz['config_source'],
-            'user': 'root',
-            'group': 'root',
-            'mode': '400',
-        },
-        ret,
-    )
+    for f in zz['config_source']:
+        b = os.path.basename(f)
+        _debug('{} => {}', f, os.path.join(zz['config_d'], b))
+        _call_state(
+            'plain_file',
+            {
+                'name': 'minion.config.' + b,
+                'file_name': os.path.join(zz['config_d'], b),
+                'source': f,
+                'user': 'root',
+                'group': 'root',
+                'mode': '400',
+            },
+            ret,
+        )
+
     if not ret['result'] or not ret['changes']:
         return ret
     __salt__['service.restart'](name='salt-minion')
@@ -233,6 +240,7 @@ def nfs_mount(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
+#TODO: setsebool -P nfs_export_all_rw 1
     _call_state(
         'pkg_installed',
         {
@@ -246,22 +254,30 @@ def nfs_mount(**kwargs):
         {
             'name': 'nfs_mount.' + zz['local_dir'],
             'dir_name': zz['local_dir'],
-            'user': root,
-            'group': root,
+            'user': 'root',
+            'group': 'root',
             'mode': '755',
         },
+        ret,
     )
     _call_state(
         'file_append',
         {
-            'file_name': '/etc/fstab',
+            'file_name': zz['fstab'],
             'text': '{} {} nfs nolock'.format(zz['remote_dir'], zz['local_dir']),
         },
         ret,
     )
-    if ret['result'] and ret['changes']:
-        _sh('mount -o remount {}'.format(zz['local_dir']), ret)
+    if not ret['result']:
+        return ret
+    opts = ''
+    if zz['remote_dir'] in _sh('mount', ret):
+        if not ret['result'] or not ret['changes']:
+            return ret
+        opts = '-o remount'
+    _sh('mount {} {}'.format(opts, zz['local_dir']), ret)
     return ret
+
 
 
 def plain_directory(**kwargs):

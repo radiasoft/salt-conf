@@ -80,8 +80,12 @@ bivio:
     want_docker_sock: True
 
   minion_update:
-    config_name: '/etc/minion/minion.d/99-bivio.conf'
-    config_source: 'salt://minion/99-bivio.conf'
+    config_d: '/etc/salt/minion.d'
+    config_source:
+      - 'salt://minion/90-bivio.conf'
+
+  nfs_mount:
+    fstab: /etc/fstab
 
   mod_init:
     inventory: '/var/lib/bivio-salt/inventory/{now}.yml'

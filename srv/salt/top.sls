@@ -40,15 +40,15 @@ def _toposort(todo):
     done = {}
     res = []
 
-    def _visit(node):
+    def _visit(node, parent=None):
         if node in done:
             assert done[node], '{}: not a DAG'.format(node)
             return
         done[node] = False
         if not node in todo:
-            raise ValueError('{} is a dependency so must be included'.format(edge))
+            raise ValueError('"{}" is a dependency of "{}" so must be included'.format(node, parent))
         for edge in todo[node]:
-            _visit(edge)
+            _visit(edge, node)
         done[node] = True
         res.append(node)
 

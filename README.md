@@ -163,6 +163,10 @@ Vagrantfile for the minion:
 Vagrant.configure(2) do |config|
   config.vm.box = "fedora-23"
   config.vm.hostname = 'v3'
+  config.vm.provider "virtualbox" do |v|
+    # Need more memory than default to run certain ops, e.g. install nfs-utils
+    v.memory = 2048
+  end
   config.vm.network "private_network", ip: "10.10.10.30"
   config.vm.synced_folder ".", "/vagrant", type: "virtualbox", disabled: true
   config.vbguest.auto_update = false
