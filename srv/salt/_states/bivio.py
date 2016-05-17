@@ -264,18 +264,19 @@ def nfs_mount(**kwargs):
         'file_append',
         {
             'file_name': zz['fstab'],
-            'text': '{} {} nfs nolock'.format(zz['remote_dir'], zz['local_dir']),
+            'text': '{} {} nfs {}'.format(zz['remote_dir'], zz['local_dir'], zz['options']),
         },
         ret,
     )
     if not ret['result']:
         return ret
-    opts = ''
     if zz['remote_dir'] in _sh('mount', ret):
         if not ret['result'] or not ret['changes']:
             return ret
-        opts = '-o remount'
-    _sh('mount {} {}'.format(opts, zz['local_dir']), ret)
+        # This probably won't work, because the directories will be in use.
+        # Need a global restart concept.
+        _sh('umount {}'.format(zz['local_dir']), ret)
+    _sh('mount {}'.format(zz['local_dir']), ret)
     return ret
 
 

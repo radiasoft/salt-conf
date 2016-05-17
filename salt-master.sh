@@ -60,8 +60,10 @@ if [[ -z $(type -t salt-master) ]]; then
     echo "Installing salt-master..." 1>&2
     curl salt.run | bash -s -- -P -M -X -N -d -Z -n git develop
 fi
+# Need no_root_squash, b/c $PWD is not accessible by root
 if _sudo_append /etc/hosts.allow 'rpcbind portmap lockd statd mountd rquotad: ALL' \
-    || _sudo_append /etc/exports "$nfs_d *(rw,root_squash,sync)"; then
+    || _sudo_append /etc/exports "$nfs_d *(rw,no_root_squash,sync)"; then
+    sudo exportfs -av
     sudo systemctl restart nfs
 fi
 
@@ -70,8 +72,9 @@ fi
 #
 #   rm -rf run
 #
-_link ../../../etc/master run/etc/salt/master
-_link ../../srv run/srv
+_link ../../../etc/master "$root_dir/etc/salt/master"
+# can't use run/srv/pillar, b/c cfg files are relative to the file
+# they are imported from so doesn't act like salt file server
 _link ../systems/jupyterhub-dev.cfg "srv/pillar/minions/$minion_id.cfg"
 
 _create run/etc/salt/master.d/99-dev.conf <<EOF
@@ -109,11 +112,11 @@ jupyterhub:
   host_user: vagrant
   nfs_local_d: /var/nfs/jupyter
   nfs_remote_d: "$master_ip:$nfs_d"
+  root_notebook_d: /var/nfs/jupyter
   proxy_auth_token: '+UFr+ALeDDPR4jg0WNX+hgaF0EV5FNat1A3Sv0swbrg='
 
 postgresql_jupyterhub:
   admin_pass: 2euhoxplPzleKWLZ
-
 EOF
 
 _create "$salt_d/$minion_conf" <<EOF

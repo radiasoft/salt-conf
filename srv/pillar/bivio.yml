@@ -86,6 +86,7 @@ bivio:
 
   nfs_mount:
     fstab: /etc/fstab
+    options: 'nolock'
 
   mod_init:
     inventory: '/var/lib/bivio-salt/inventory/{now}.yml'
