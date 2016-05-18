@@ -37,6 +37,9 @@ jupyterhub_nfs:
   radia.nfs_mount:
     - local_dir: '{{ pillar.jupyterhub.nfs_local_d }}'
     - remote_dir: '{{ pillar.jupyterhub.nfs_remote_d }}'
+    - user: '{{ pillar.jupyterhub.jupyter_host_user }}'
+    - group: '{{ pillar.jupyterhub.jupyter_guest_user }}'
+    - mode: 700
 {% endif %}
 
 {% if pillar.jupyterhub.root_notebook_d %}

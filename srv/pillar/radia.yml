@@ -87,6 +87,9 @@ radia:
   nfs_mount:
     fstab: /etc/fstab
     options: 'nolock'
+    user: root
+    group: root
+    mode: 755
 
   mod_init:
     inventory: '/var/lib/radia-salt/inventory/{now}.yml'

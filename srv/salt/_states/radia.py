@@ -258,9 +258,9 @@ def nfs_mount(**kwargs):
         {
             'name': 'nfs_mount.' + zz['local_dir'],
             'dir_name': zz['local_dir'],
-            'user': 'root',
-            'group': 'root',
-            'mode': '755',
+            'user': zz['user'],
+            'group': zz['group'],
+            'mode': zz['mode'],
         },
         ret,
     )
