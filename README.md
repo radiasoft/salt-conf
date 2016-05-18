@@ -125,35 +125,28 @@ Vagrant.configure(2) do |config|
 end
 ```
 
-I work right out of `/srv`. As root install the master:
+Once logged in, start the master:
 
 ```bash
-bash init.sh
+mkdir -p ~/src/radiasoft
+cd ~/src/radiasoft
+git clone https://github.com/radiasoft/salt-conf
+cd salt-conf
+bash salt-master.sh
 ```
 
-As vagrant:
+This will do a lot of things, mostly creating files in the `run`
+subdirectory, but also setting up NFS on the master so we
+can test NFS for JupyterHub.
+
+You can clear the state by simply:
 
 ```bash
-cd /srv
-git clone https://github.com/radiasoftware/salt-conf
-mv salt-conf/{.??*,*} .
-rmdir salt-conf
-ln -s srv/salt srv/pillar .
-rm /etc/salt/master
-ln -s /srv/etc/master /etc/salt
-cat <<'EOF' > /etc/salt/master.d/vagrant.conf
-pidfile: /tmp/salt-master.pid
-log_level: debug
-log_level_logfile: debug
-EOF
-ln -s ../systems/jupyterhub-dev.cfg /srv/srv/pillar/minions/v3
+rm -rf run
+bash salt-master.sh
 ```
 
-Start the master in an emacs window or screen:
-
-```bash
-salt-master
-```
+The master is setup for autoaccept.
 
 #### Minion
 
@@ -177,16 +170,19 @@ Installing minion as root:
 
 ```bash
 curl radia.run | sudo bash -s salt 10.10.10.10
+logout
 ```
 
-Then on the master:
+You need to logout of the minion host, because salt will need to update
+the user id for vagrant.
+
+On the master in the salt-conf directory:
 
 ```bash
-salt-key -y -a v3
-salt v3 state.apply
+salt -c run/etc/salt v3 state.apply
 # This will restart the minion b/c salt config changed, then again with
 # a long timeout, because this pulls the initial docker images:
-salt v3 --timeout=300 state.apply
+salt -c run/etc/salt v3 --timeout=300 state.apply
 ```
 
 To reinstall the minion, you'll need to delete the key before the curl install:
