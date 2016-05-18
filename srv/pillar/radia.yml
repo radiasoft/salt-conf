@@ -1,5 +1,5 @@
 #
-# Base _states/bivio.py configuration
+# Base _states/radia.py configuration
 #
 {% set zz = dict(
     user='vagrant',
@@ -9,7 +9,7 @@
     docker_sock='/run/docker.sock',
 ) %}
 
-bivio:
+radia:
   state_trees:
     utilities:
       require: []
@@ -55,7 +55,7 @@ bivio:
 
   docker_sock_semodule:
     # policy names seem to be alphanum only
-    policy_name: biviodockersock
+    policy_name: radiadockersock
 {% raw %}
     contents: |
       module {{ zz.policy_name }} 1.0;
@@ -82,14 +82,14 @@ bivio:
   minion_update:
     config_d: '/etc/salt/minion.d'
     config_source:
-      - 'salt://minion/90-bivio.conf'
+      - 'salt://minion/90-radia.conf'
 
   nfs_mount:
     fstab: /etc/fstab
     options: 'nolock'
 
   mod_init:
-    inventory: '/var/lib/bivio-salt/inventory/{now}.yml'
+    inventory: '/var/lib/radia-salt/inventory/{now}.yml'
 
   plain_directory:
     dir_mode: "{{ zz.dir_mode }}"

@@ -1,5 +1,5 @@
 base_pkgs:
-  bivio.pkg_installed:
+  radia.pkg_installed:
     - pkgs:
       - docker
       - emacs-nox
@@ -9,6 +9,6 @@ base_pkgs:
       - telnet
 
 screenrc_config:
-  bivio.file_append:
+  radia.file_append:
     - file_name: /etc/screenrc
     - text: "escape ^^^^"

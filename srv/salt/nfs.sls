@@ -1,5 +1,5 @@
 nfs_volume:
-  server_dir: apa11b.bivio.biz:/home
+  server_dir: apa11b.radia.biz:/home
   mount_point: /var/nfs/apa11/home:
 
 /var/nfs/apa11/home:
@@ -12,7 +12,7 @@ nfs_volume:
     - mode: 755
     - makedirs: True
   mount.mounted:
-    - device: apa11b.bivio.biz:/home
+    - device: apa11b.radia.biz:/home
     - fstype: nfs
     # Work around: https://github.com/saltstack/salt/issues/18630
     # opts: rw,relatime,vers=4.0,rsize=1048576,wsize=1048576,na mlen=255,hard,proto=tcp,port=0,timeo=600,retrans=2,sec=sys,clientaddr=192.168.1. 20,local_lock=none,addr=192.168.1.11

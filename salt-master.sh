@@ -47,10 +47,10 @@ _sudo_append() {
 root_dir=$PWD/run
 nfs_d=$root_dir/nfs
 salt_d=$root_dir/srv/salt
-minion_conf=99-bivio-dev.conf
+minion_conf=99-radia-dev.conf
 mkdir -p $root_dir/{etc/salt/{master.d,pki},var/cache/salt,var/log/salt,var/run/salt} \
       "$nfs_d" "$salt_d"
-
+chmod 755 "$nfs_d"
 
 #
 # Global actions
@@ -92,8 +92,8 @@ user: "$USER"
 EOF
 
 _create "srv/pillar/secrets/jupyterhub-dev.yml" <<EOF
-#TODO: move to bivio-dev.yml(?)
-bivio:
+#TODO: move to radia-dev.yml(?)
+radia:
   minion_update:
     config_source:
       - 'salt://$minion_conf'

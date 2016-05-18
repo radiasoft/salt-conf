@@ -1,5 +1,5 @@
 postgresql_jupyterhub_container:
-  bivio.docker_container:
+  radia.docker_container:
     - container_name: '{{ pillar.jupyterhub.postgresql_name }}'
     - cmd: postgres
     - guest_user: postgres
@@ -17,11 +17,11 @@ postgresql_jupyterhub_container:
       - [ '{{ pillar.jupyterhub.postgresql_host_run_d }}', /run/postgresql ]
 
 jupyter_singleuser_image:
-  bivio.docker_image:
+  radia.docker_image:
     - image_name: '{{ pillar.jupyterhub.jupyter_singleuser_image }}'
 
 jupyterhub_config:
-  bivio.plain_file:
+  radia.plain_file:
     - file_name: '{{ pillar.jupyterhub.host_conf_f }}'
     - contents_pillar: jupyterhub:conf_contents
     - user: root
@@ -31,13 +31,13 @@ jupyterhub_config:
 
 {% if pillar.jupyterhub.nfs_local_d %}
 jupyterhub_nfs:
-  bivio.nfs_mount:
+  radia.nfs_mount:
     - local_dir: '{{ pillar.jupyterhub.nfs_local_d }}'
     - remote_dir: '{{ pillar.jupyterhub.nfs_remote_d }}'
 {% endif %}
 
 jupyterhub_container:
-  bivio.docker_container:
+  radia.docker_container:
     - after:
         - {{ pillar.jupyterhub.postgresql_name }}
     - container_name: jupyterhub

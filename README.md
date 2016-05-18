@@ -41,14 +41,14 @@ Here's what `systems/jupyterhub-dev.cfg` looks like:
 
 ```text
 channel/dev.yml
-bivio.yml
+radia.yml
 jupyterhub/base.yml
 jupyterhub/secret-slug-dev.yml
 ```
 
 The first entry classifies the system according to its channel
 (development pipeline stage). The next line configures the basic
-bivio pillar configuration. The subsequent lines describe aspects
+radia pillar configuration. The subsequent lines describe aspects
 of the system. In this case, we configure the dev box
 with the jupyterhub subsystem.
 
@@ -62,7 +62,7 @@ secret configuration so we provide host in `secret-slug` files.
 Every subsystem contains a pillar of the form:
 
 ```yaml
-bivio:
+radia:
   state_trees:
     jupyterhub:
       include: True
@@ -85,27 +85,27 @@ can be useful.
 #### srv/salt/top.sls
 
 The [top file](srv/salt/top.sls)
-looks for the `bivio:state_trees` pillar, and
+looks for the `radia:state_trees` pillar, and
 sorts the dependencies using a toposort. It then returns
 the list of state trees to be execute by salt for this
 minion.
 
-#### srv/salt/_states/bivio.py
+#### srv/salt/_states/radia.py
 
-All states go through `bivio.py`, which defines a set of
+All states go through `radia.py`, which defines a set of
 higher level abstractions based on Bivio's policies. This
 simplifies the state tree by consolidating dependencies.
 For example, most system services are configured with
-docker containers so the state `bivio.docker_container`
+docker containers so the state `radia.docker_container`
 encapsulates the entire process of pulling the image,
 configuring the container, and managing the systemd
 service.
 
-The other problem which `bivio.py` solves is to
+The other problem which `radia.py` solves is to
 document what is actually installed on the system,
 not just what is described by the current salt
-state trees and pillars. All bivio states document
-their actions in files in `/var/lib/bivio-salt/inventory`
+state trees and pillars. All radia states document
+their actions in files in `/var/lib/radia-salt/inventory`
 on the minion. Eventually, the inventory will contain
 all actions to undo the actual state of the system.
 
@@ -135,7 +135,7 @@ As vagrant:
 
 ```bash
 cd /srv
-git clone https://github.com/biviosoftware/salt-conf
+git clone https://github.com/radiasoftware/salt-conf
 mv salt-conf/{.??*,*} .
 rmdir salt-conf
 ln -s srv/salt srv/pillar .
@@ -204,4 +204,4 @@ salt-call -l debug state.apply 2>&1 | tee err
 
 #### References
 
-[General discussion in Utilities Wiki.](https://github.com/biviosoftware/utilities/wiki/Salt)
+[General discussion in Utilities Wiki.](https://github.com/radiasoftware/utilities/wiki/Salt)

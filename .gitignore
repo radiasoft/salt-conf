@@ -1,12 +1,7 @@
 .\#*
 \#*\#
 *~
-pki/
 run/
-log/
-cache/
-bivio-service
-init.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

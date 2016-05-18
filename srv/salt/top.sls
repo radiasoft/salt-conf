@@ -6,12 +6,12 @@
 # to drive the state tree files to be run.
 #
 def run():
-    """Include bivio:state_trees in the order they need to run.
+    """Include radia:state_trees in the order they need to run.
 
     state_trees are "state files" with dependencies specified
     in pillars as follows::
 
-        bivio:
+        radia:
           state_trees:
             utilities:
                include: True
@@ -24,7 +24,7 @@ def run():
     won't be included in the list of state trees to run.
     """
     todo = {}
-    for k, v in __pillar__['bivio']['state_trees'].iteritems():
+    for k, v in __pillar__['radia']['state_trees'].iteritems():
         if v and v['include']:
             todo[k] = v['require']
 

@@ -339,7 +339,7 @@ def _call_state(state, kwargs, ret):
         return None
     if not '.' in state:
         # not __name__
-        state = 'bivio' + '.' + state
+        state = 'radia' + '.' + state
     new = __states__[state](**zz)
     _debug('state={} ret={}', state, new)
     _inv(zz, new)
@@ -354,7 +354,7 @@ def _debug(fmt, *args, **kwargs):
     if not isinstance(fmt, str):
         fmt = '{}'
         args = [fmt]
-    s = ('{}.{}: ' + fmt).format('bivio', _caller(), *args, **kwargs)
+    s = ('{}.{}: ' + fmt).format('radia', _caller(), *args, **kwargs)
     _log.debug('%s', s)
 
 
@@ -555,7 +555,7 @@ def _inv(kwargs, ret=None):
 
 
 def _pillar(key=None, caller=None):
-    full_key = ['bivio', caller or _caller()]
+    full_key = ['radia', caller or _caller()]
     if key:
          full_key += key.split('.')
     res = __pillar__
@@ -714,7 +714,7 @@ def _temp_dir():
     d = None
     prev_d = os.getcwd()
     try:
-        d = tempfile.mkdtemp(prefix='salt-bivio-')
+        d = tempfile.mkdtemp(prefix='salt-radia-')
         os.chdir(d)
         yield d
     finally:
