@@ -185,19 +185,24 @@ salt -c run/etc/salt v3 state.apply
 salt -c run/etc/salt v3 --timeout=300 state.apply
 ```
 
-To reinstall the minion, you'll need to delete the key before the curl install:
+To reinstall the minion, you'll need to delete the key on the master before the curl install:
 
 ```bash
 salt-key -y -d v3
 ```
 
-
-Executing on the minion gives more information, as root:
+To reintsall the master, you need to delete the key on the minion:
 
 ```bash
-salt-call -l debug state.apply 2>&1 | tee err
+sudo rm /etc/salt/pki/minion/minion_master.pub
+```
+
+Executing on the minion gives more information:
+
+```bash
+sudo salt-call -l debug state.apply 2>&1 | tee err
 ```
 
 #### References
 
-[General discussion in Utilities Wiki.](https://github.com/radiasoftware/utilities/wiki/Salt)
+[General discussion in Utilities Wiki.](https://github.com/radiasoft/utilities/wiki/Salt)
