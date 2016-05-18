@@ -41,10 +41,11 @@ jupyterhub:
         def _volumes_to_binds(self, *args, **kwargs):
             binds = super(_Spawner, self)._volumes_to_binds(*args, **kwargs)
             for v in binds:
-               if not os.path.exists(v):
-                   os.mkdir(v)
-                   pw = pwd.getpwnam('{{ pillar.jupyterhub.jupyter_guest_user}}')
-                   os.chown(v, pw.pw_uid, pw.pw_gid)
+                if not os.path.exists(v):
+                    os.mkdir(v)
+                    if '{{ pillar.jupyterhub.jupyter_guest_user}}' != '{{ pillar.jupyterhub.guest_user}}':
+                        pw = pwd.getpwnam('{{ pillar.jupyterhub.jupyter_guest_user}}')
+                        os.chown(v, pw.pw_uid, pw.pw_gid)
             return binds
     c.JupyterHub.spawner_class = _Spawner
     c.DockerSpawner.volumes = {

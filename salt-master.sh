@@ -110,7 +110,6 @@ jupyterhub:
   db_pass: Ydt21HRKO7NnMBIC
   github_client_id: ignored
   github_client_secret: ignored
-  host_user: vagrant
   nfs_local_d: /var/nfs/jupyter
   nfs_remote_d: "$master_ip:$nfs_d"
   root_notebook_d: /var/nfs/jupyter

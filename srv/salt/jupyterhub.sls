@@ -1,3 +1,6 @@
+#
+# TODO(robnagler) configure backups for postgres
+#
 postgresql_jupyterhub_container:
   radia.docker_container:
     - container_name: '{{ pillar.jupyterhub.postgresql_name }}'
@@ -34,6 +37,15 @@ jupyterhub_nfs:
   radia.nfs_mount:
     - local_dir: '{{ pillar.jupyterhub.nfs_local_d }}'
     - remote_dir: '{{ pillar.jupyterhub.nfs_remote_d }}'
+{% endif %}
+
+{% if pillar.jupyterhub.root_notebook_d %}
+jupyterhub_root_notebook_d:
+  radia.plain_directory:
+    - dir_name: '{{ pillar.jupyterhub.root_notebook_d }}'
+    - user: {{ pillar.jupyterhub.jupyter_host_user }}
+    - group: {{ pillar.jupyterhub.jupyter_host_user }}
+    - mode: 700
 {% endif %}
 
 jupyterhub_container:
