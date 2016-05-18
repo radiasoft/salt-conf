@@ -51,6 +51,9 @@ jupyterhub_container:
         - [ {{ pillar.jupyterhub.host_port }}, {{ pillar.jupyterhub.guest_port }} ]
     - volumes:
         - [ {{ pillar.jupyterhub.host_conf_d }}, {{ pillar.jupyterhub.guest_conf_d }} ]
+        {% if pillar.jupyterhub.nfs_local_d %}
+        - [ {{ pillar.jupyterhub.nfs_local_d }}, {{ pillar.jupyterhub.nfs_local_d }} ]
+        {% endif %}
     - want_docker_sock: True
 
 # Needed for vagrant

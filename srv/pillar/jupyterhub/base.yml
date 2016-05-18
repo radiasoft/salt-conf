@@ -29,15 +29,32 @@ jupyterhub:
     from dockerspawner import DockerSpawner
     from jupyter_client.localinterfaces import public_ips
 
+    # May be overwritten below
+    c.JupyterHub.spawner_class = DockerSpawner
+
     c.Authenticator.admin_users = set(['{{ pillar.jupyterhub.admin_users|join("', '") }}'])
     c.DockerSpawner.container_image = '{{ pillar.jupyterhub.jupyter_singleuser_image }}'
     c.DockerSpawner.use_internal_ip = True
     {% if pillar.jupyterhub.root_notebook_d %}
+    import os.path, pwd
+    class _Spawner(DockerSpawner):
+        def _volumes_to_binds(self, *args, **kwargs):
+            binds = super(_Spawner, self)._volumes_to_binds(*args, **kwargs)
+            for v in binds:
+               if not os.path.exists(v):
+                   os.mkdir(v)
+                   pw = pwd.getpwnam('{{ pillar.jupyterhub.jupyter_guest_user}}')
+                   os.chown(v, pw.pw_uid, pw.pw_gid)
+            return binds
+    c.JupyterHub.spawner_class = _Spawner
     c.DockerSpawner.volumes = {
         '{{ pillar.jupyterhub.root_notebook_d }}/{username}': {
-             # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
+            # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
             'bind': '/home/{{ pillar.jupyterhub.jupyter_guest_user }}/jupyter',
+            # NFS is allowed globally the "Z" modifies an selinux context for non-NFS files
+            {% if not pillar.jupyterhub.nfs_local_d %}
             'mode': 'Z',
+            {% endif %}
         },
     }
     {% endif %}
@@ -51,9 +68,8 @@ jupyterhub:
     c.JupyterHub.ip = '0.0.0.0'
     c.JupyterHub.port = {{ pillar.jupyterhub.guest_port }}
     c.JupyterHub.proxy_auth_token = '{{ pillar.jupyterhub.proxy_auth_token }}'
-    c.JupyterHub.spawner_class = DockerSpawner
     {% if pillar.jupyterhub.debug %}
-    c.JupyterHub.log_level = 'DEBUG'
+    c.Application.log_level = 'DEBUG'
     c.Spawner.debug = True
     c.LocalProcessSpawner.debug = True
     {% endif %}
@@ -70,10 +86,10 @@ jupyterhub:
   host_port: 8000
   host_user: root
   image_name: radiasoft/jupyterhub
-  jupyter_guest_user: '{{ pillar.radia.docker_container.guest_user }}'
-  jupyter_host_user: '{{ pillar.radia.docker_container.host_user }}'
+  jupyter_guest_user: '{{ stack.radia.docker_container.guest_user }}'
+  jupyter_host_user: '{{ stack.radia.docker_container.host_user }}'
   # PIVOT: _states/radia.py assumes pykern.channel
-  jupyter_singleuser_image: 'radiasoft/beamsim-jupyter:{{ pillar.pykern.channel }}'
+  jupyter_singleuser_image: 'radiasoft/beamsim-jupyter:{{ stack.pykern.channel }}'
   nfs_local_d: ''
   nfs_remote_d: ''
   postgresql_host_data_d: '{{ zz.postgresql_host_home_d }}/data'

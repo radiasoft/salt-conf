@@ -92,8 +92,6 @@ radia:
     inventory: '/var/lib/radia-salt/inventory/{now}.yml'
 
   plain_directory:
-    dir_mode: "{{ zz.dir_mode }}"
-    file_mode: "{{ zz.file_mode }}"
     group: "{{ zz.user }}"
     makedirs: True
     user: "{{ zz.user }}"

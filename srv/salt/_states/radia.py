@@ -144,7 +144,7 @@ def docker_sock_semodule(**kwargs):
     if not ret['result']:
         return ret
     modules = _sh('semodule -l', ret)
-    if modules is None or zz['policy_name'] in modules:
+    if not modules or zz['policy_name'] in modules:
         return ret
     with _temp_dir() as d:
         pn = zz['policy_name']
@@ -236,11 +236,15 @@ def minion_update(**kwargs):
     )
 
 
+def nfs_export(**kwargs):
+    #TODO: setsebool -P nfs_export_all_rw 1
+    pass
+
+
 def nfs_mount(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
-#TODO: setsebool -P nfs_export_all_rw 1
     _call_state(
         'pkg_installed',
         {
@@ -268,6 +272,7 @@ def nfs_mount(**kwargs):
         },
         ret,
     )
+    ret = _nfs_mount_selinux(zz, ret)
     if not ret['result']:
         return ret
     if zz['remote_dir'] in _sh('mount', ret):
@@ -420,7 +425,8 @@ def _docker_container_args_pairs(zz):
 
             # http://www.projectatomic.io/blog/2015/06/using-volumes-with-docker-can-cause-problems-with-selinux/
             if key == 'volumes':
-                s += ':Z'
+                if not _is_nfs_d(v[0]):
+                    s += ':Z'
             args += s
     return args
 
@@ -554,6 +560,38 @@ def _inv(kwargs, ret=None):
         )
 
 
+def _is_nfs_d(d):
+    ret = _ret_init({'name': '_is_nfs_d'})
+    return 'nfs' in _sh("stat -f -L -c '%T' {}".format(d), ret, ignore_errors=True)
+
+
+def _nfs_mount_selinux(zz, ret):
+    if not ret['result']:
+        return ret
+    if not 'enabled' in _sh('sestatus', ret, ignore_errors=True):
+        return ret
+    all_bools = _sh('getsebool -a', ret)
+    changes = ''
+    for v in 'virt_use_nfs', 'virt_sandbox_use_nfs', 'virt_sandbox_use_all_caps':
+        # Some of these variables do not exist, so check for off.
+        # Too rigid of a test, but the only way to do this
+        if v + ' --> off' in all_bools:
+            _sh('setsebool -P {} on'.format(v), ret)
+            changes += ' ' + v
+    if not changes:
+        return ret
+    return _ret_merge(
+        zz,
+        ret,
+        {
+            'changes': {
+                'new': 'setsebool on: ' + changes,
+            },
+            'comment': 'selinux enabled for NFS',
+        },
+    )
+
+
 def _pillar(key=None, caller=None):
     full_key = ['radia', caller or _caller()]
     if key:
@@ -653,7 +691,7 @@ def _service_status(zz, which=('active', 'enabled')):
 
 def _sh(cmd, ret, ignore_errors=False):
     if not ret['result']:
-        return None
+        return ''
     name = 'shell.' + cmd
     stdout = None
     stderr = None
@@ -685,9 +723,9 @@ def _sh(cmd, ret, ignore_errors=False):
                     err, stdout[-1000:], stderr[-1000:]),
             },
         )
-        return None
+        return ''
     _inv({'name': name, 'stdout': stdout, 'stderr': stderr})
-    return None if err else stdout
+    return '' if err else stdout
 
 
 def _state_init(kwargs, caller=None):

@@ -93,7 +93,7 @@ minion.
 #### srv/salt/_states/radia.py
 
 All states go through `radia.py`, which defines a set of
-higher level abstractions based on Bivio's policies. This
+higher level abstractions based on our policies. This
 simplifies the state tree by consolidating dependencies.
 For example, most system services are configured with
 docker containers so the state `radia.docker_container`

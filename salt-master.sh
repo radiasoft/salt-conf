@@ -14,7 +14,8 @@ fi
 
 _create() {
     local file=$1
-    if [[ -r $file ]]; then
+    local force=$2
+    if [[ -z $force && -r $file ]]; then
         return
     fi
     dd of="$file"
@@ -48,7 +49,7 @@ root_dir=$PWD/run
 nfs_d=$root_dir/nfs
 salt_d=$root_dir/srv/salt
 minion_conf=99-radia-dev.conf
-mkdir -p $root_dir/{etc/salt/{master.d,pki},var/cache/salt,var/log/salt,var/run/salt} \
+mkdir -p $root_dir/{etc/salt/{master.d,pki},var/cache/salt,var/log/salt,var/run/salt,secrets} \
       "$nfs_d" "$salt_d"
 chmod 755 "$nfs_d"
 
@@ -91,7 +92,7 @@ root_dir: "$root_dir"
 user: "$USER"
 EOF
 
-_create "srv/pillar/secrets/jupyterhub-dev.yml" <<EOF
+_create srv/pillar/secrets/jupyterhub-dev.yml force <<EOF
 #TODO: move to radia-dev.yml(?)
 radia:
   minion_update:
@@ -120,6 +121,7 @@ postgresql_jupyterhub:
 EOF
 
 _create "$salt_d/$minion_conf" <<EOF
+log_level: debug
 log_level_logfile: debug
 EOF
 
