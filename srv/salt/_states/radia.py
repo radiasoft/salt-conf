@@ -286,6 +286,19 @@ def nfs_mount(**kwargs):
 
 
 
+def ntpd_service(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    # Ignore incoming name as it doesn't matter for the rest
+    if _service_status(zz)[0]:
+        _ret_merge(zz, ret, {'comment': 'service is running'})
+    else:
+        _call_state('pkg_installed', {'name': 'ntpd_service.pkgs', 'pkgs': zz['required_pkgs']}, ret)
+        _service_restart(zz, ret)
+    return ret
+
+
 def plain_directory(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:

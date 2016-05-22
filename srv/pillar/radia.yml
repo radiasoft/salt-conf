@@ -91,6 +91,11 @@ radia:
     group: root
     mode: 755
 
+  ntpd_service:
+    service_name: ntpd
+    required_pkgs:
+      - ntp
+
   mod_init:
     inventory: '/var/lib/radia-salt/inventory/{now}.yml'
 
