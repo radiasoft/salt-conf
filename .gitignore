@@ -3,6 +3,7 @@
 *~
 run/
 bivio-service
+docker-tls/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
