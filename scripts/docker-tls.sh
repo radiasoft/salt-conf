@@ -57,4 +57,4 @@ for host in "$@"; do
 done
 
 create_yml docker_master_client docker-master-client 'extendedKeyUsage = clientAuth'
-chmod -R go-rwx docker-tls
+chmod -R go-rwx .
