@@ -2,6 +2,7 @@
 #
 # Initialize Certificate Authority
 #
+set -e
 if (( $# == 0 )); then
     echo "usage: bash $0 server-ip/host..." 1>&2
     exit 1
