@@ -9,6 +9,7 @@ if (( $# == 0 )); then
 fi
 
 cd "$(dirname $0)/.."
+umask 077
 mkdir -p docker-tls
 cd docker-tls
 if [[ ! -f ca.crt ]]; then
@@ -39,9 +40,10 @@ import re
 
 print('radia:\n  $pillar:')
 for k, f in ('tlskey', '$host.key'), ('tlscacert', 'ca.crt'), ('tlscert', '$host.crt'):
-    print('    {}: |'.format(k))
+    print('    {0}: |'.format(k))
     print(re.sub('^', '      ', open(f).read(), flags=re.MULTILINE))
 EOF
+    chmod ug=r,o-rwx "$yml"
     echo "Created: $yml"
 }
 
@@ -55,3 +57,4 @@ for host in "$@"; do
 done
 
 create_yml docker_master_client docker-master-client 'extendedKeyUsage = clientAuth'
+chmod go-rwx docker-tls
