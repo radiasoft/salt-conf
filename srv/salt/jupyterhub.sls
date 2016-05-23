@@ -19,10 +19,6 @@ postgresql_jupyterhub_container:
       - [ '{{ pillar.jupyterhub.postgresql_host_data_d }}', /var/lib/postgresql/data ]
       - [ '{{ pillar.jupyterhub.postgresql_host_run_d }}', /run/postgresql ]
 
-jupyter_singleuser_image:
-  radia.docker_image:
-    - image_name: '{{ pillar.jupyterhub.jupyter_singleuser_image }}'
-
 jupyterhub_config:
   radia.plain_file:
     - file_name: '{{ pillar.jupyterhub.host_conf_f }}'
@@ -30,26 +26,7 @@ jupyterhub_config:
     - user: root
     - group: root
     - zz:
-        jupyter_image: '{{ pillar.jupyterhub.jupyter_singleuser_image }}'
-
-{% if pillar.jupyterhub.nfs_local_d %}
-jupyterhub_nfs:
-  radia.nfs_mount:
-    - local_dir: '{{ pillar.jupyterhub.nfs_local_d }}'
-    - remote_dir: '{{ pillar.jupyterhub.nfs_remote_d }}'
-    - user: '{{ pillar.jupyterhub.jupyter_host_user }}'
-    - group: '{{ pillar.jupyterhub.jupyter_guest_user }}'
-    - mode: 700
-{% endif %}
-
-{% if pillar.jupyterhub.root_notebook_d %}
-jupyterhub_root_notebook_d:
-  radia.plain_directory:
-    - dir_name: '{{ pillar.jupyterhub.root_notebook_d }}'
-    - user: {{ pillar.jupyterhub.jupyter_host_user }}
-    - group: {{ pillar.jupyterhub.jupyter_host_user }}
-    - mode: 700
-{% endif %}
+        jupyter_image: '{{ pillar.jupyter.image_name }}'
 
 jupyterhub_container:
   radia.docker_container:
@@ -66,8 +43,8 @@ jupyterhub_container:
         - [ {{ pillar.jupyterhub.host_port }}, {{ pillar.jupyterhub.guest_port }} ]
     - volumes:
         - [ {{ pillar.jupyterhub.host_conf_d }}, {{ pillar.jupyterhub.guest_conf_d }} ]
-        {% if pillar.jupyterhub.nfs_local_d %}
-        - [ {{ pillar.jupyterhub.nfs_local_d }}, {{ pillar.jupyterhub.nfs_local_d }} ]
+        {% if pillar.jupyter.nfs_local_d %}
+        - [ {{ pillar.jupyter.nfs_local_d }}, {{ pillar.jupyter.nfs_local_d }} ]
         {% endif %}
     - want_docker_sock: True
 

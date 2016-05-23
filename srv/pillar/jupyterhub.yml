@@ -1,7 +1,7 @@
 #
 # Default configuration for salt/jupyterhub.sls
 #
-# Use jupyterh_secret.py to generate passwords and (fake) OAuth keys
+# Use scripts/jupyterhub_secret.py to generate passwords and (fake) OAuth keys
 #
 {% set zz = dict(
     jupyterhub_conf_f='jupyterhub_config.py',
@@ -19,6 +19,7 @@ radia:
       include: True
       require:
         - utilities
+        - jupyter
 
 jupyterhub:
   authenticator_class: oauthenticator.GitHubOAuthenticator
@@ -33,11 +34,11 @@ jupyterhub:
     c.JupyterHub.spawner_class = DockerSpawner
 
     c.Authenticator.admin_users = set(['{{ pillar.jupyterhub.admin_users|join("', '") }}'])
-    c.DockerSpawner.container_image = '{{ pillar.jupyterhub.jupyter_singleuser_image }}'
+    c.DockerSpawner.container_image = '{{ pillar.jupyter.image_name }}'
     c.DockerSpawner.use_internal_ip = True
     # Remove containers when the user stops them
     c.DockerSpawner.remove_containers = True
-    {% if pillar.jupyterhub.root_notebook_d %}
+    {% if pillar.jupyter.root_notebook_d %}
     import os.path, pwd
     class _Spawner(DockerSpawner):
         def _volumes_to_binds(self, *args, **kwargs):
@@ -45,17 +46,17 @@ jupyterhub:
             for v in binds:
                 if not os.path.exists(v):
                     os.mkdir(v)
-                    if '{{ pillar.jupyterhub.jupyter_guest_user}}' != '{{ pillar.jupyterhub.guest_user}}':
-                        pw = pwd.getpwnam('{{ pillar.jupyterhub.jupyter_guest_user}}')
+                    if '{{ pillar.jupyter.guest_user}}' != '{{ pillar.jupyterhub.guest_user}}':
+                        pw = pwd.getpwnam('{{ pillar.jupyter.guest_user}}')
                         os.chown(v, pw.pw_uid, pw.pw_gid)
             return binds
     c.JupyterHub.spawner_class = _Spawner
     c.DockerSpawner.volumes = {
-        '{{ pillar.jupyterhub.root_notebook_d }}/{username}': {
+        '{{ pillar.jupyter.root_notebook_d }}/{username}': {
             # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
-            'bind': '/home/{{ pillar.jupyterhub.jupyter_guest_user }}/jupyter',
+            'bind': '/home/{{ pillar.jupyter.guest_user }}/jupyter',
             # NFS is allowed globally the "Z" modifies an selinux context for non-NFS files
-            {% if not pillar.jupyterhub.nfs_local_d %}
+            {% if not pillar.jupyter.nfs_local_d %}
             'mode': 'Z',
             {% endif %}
         },
@@ -89,15 +90,8 @@ jupyterhub:
   host_port: 8000
   host_user: root
   image_name: radiasoft/jupyterhub
-  jupyter_guest_user: '{{ stack.radia.docker_container.guest_user }}'
-  jupyter_host_user: '{{ stack.radia.docker_container.host_user }}'
-  # PIVOT: _states/radia.py assumes pykern.channel
-  jupyter_singleuser_image: 'radiasoft/beamsim-jupyter:{{ stack.pykern.channel }}'
-  nfs_local_d: ''
-  nfs_remote_d: ''
   postgresql_host_data_d: '{{ zz.postgresql_host_home_d }}/data'
   postgresql_host_home_d: '{{ zz.postgresql_host_home_d }}'
   postgresql_host_run_d: '{{ zz.postgresql_host_home_d }}/run'
   postgresql_image: 'radiasoft/{{ zz.postgresql_name }}'
   postgresql_name: '{{ zz.postgresql_name }}'
-  root_notebook_d: ''

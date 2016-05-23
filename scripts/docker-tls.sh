@@ -7,7 +7,7 @@ if (( $# == 0 )); then
     exit 1
 fi
 
-cd "$(dirname $0)"
+cd "$(dirname $0)/.."
 mkdir -p docker-tls
 cd docker-tls
 if [[ ! -f ca.crt ]]; then
@@ -53,6 +53,4 @@ for host in "$@"; do
     create_yml docker_service "$host" "subjectAltName = IP:$ip,IP:127.0.0.1"
 done
 
-if [[ ! -f client.key ]]; then
-    create_yml docker_master_client client 'extendedKeyUsage = clientAuth'
-fi
+create_yml docker_master_client docker-master-client 'extendedKeyUsage = clientAuth'

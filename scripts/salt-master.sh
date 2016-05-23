@@ -5,7 +5,10 @@
 set -e
 
 : ${master_ip:=10.10.10.10}
-: ${minion_id:=v3}
+: ${minion_id:=z30.bivio.biz}
+
+cd "$(dirname $0)/.."
+pwd
 
 if ! ip addr show eth1 | grep -s -q "$master_ip"; then
     echo "Call with master_ip=a.b.c.d bash $0" 1>&2
@@ -58,7 +61,6 @@ sudo chmod 755 "$nfs_d"
 #
 # Global actions
 #
-cd "$(dirname "$0")"
 if [[ -z $(type -t salt-master) ]]; then
     echo "Installing salt-master..." 1>&2
     curl salt.run | bash -s -- -P -M -X -N -d -Z -n git develop
@@ -95,13 +97,21 @@ root_dir: "$root_dir"
 user: "$USER"
 EOF
 
-_create srv/pillar/secrets/jupyterhub-dev.yml force <<EOF
-#TODO: move to radia-dev.yml(?)
+_create srv/pillar/secrets/radia-dev.yml force <<EOF
 radia:
   minion_update:
     config_source:
       - 'salt://$minion_conf'
+EOF
 
+_create srv/pillar/secrets/jupyter-dev.yml force <<EOF
+jupyter:
+  nfs_local_d: /var/nfs/jupyter
+  nfs_remote_d: "$master_ip:$nfs_d"
+  root_notebook_d: /var/nfs/jupyter
+EOF
+
+_create srv/pillar/secrets/jupyterhub-dev.yml force <<EOF
 jupyterhub:
   admin_users:
   - vagrant
@@ -113,9 +123,6 @@ jupyterhub:
   db_pass: Ydt21HRKO7NnMBIC
   github_client_id: ignored
   github_client_secret: ignored
-  nfs_local_d: /var/nfs/jupyter
-  nfs_remote_d: "$master_ip:$nfs_d"
-  root_notebook_d: /var/nfs/jupyter
   proxy_auth_token: '+UFr+ALeDDPR4jg0WNX+hgaF0EV5FNat1A3Sv0swbrg='
 
 postgresql_jupyterhub:

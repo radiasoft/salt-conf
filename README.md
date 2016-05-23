@@ -132,7 +132,7 @@ mkdir -p ~/src/radiasoft
 cd ~/src/radiasoft
 git clone https://github.com/radiasoft/salt-conf
 cd salt-conf
-bash salt-master.sh
+bash scripts/salt-master.sh
 ```
 
 This will do a lot of things, mostly creating files in the `run`
@@ -143,7 +143,7 @@ You can clear the state by simply:
 
 ```bash
 rm -rf run
-bash salt-master.sh
+bash scripts/salt-master.sh
 ```
 
 The master is setup for autoaccept.
