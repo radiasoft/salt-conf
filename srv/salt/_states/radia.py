@@ -39,6 +39,8 @@ _DOCKER_FLAG_PAIRS = {
     'env': '-e',
 }
 
+_DOCKER_TLS_FLAGS = ('tlskey', 'tlscert', 'tlscacert')
+
 '''
 def docker_update():
     update and restart
@@ -50,6 +52,60 @@ def pkg_update():
     need to udpate all known packages and reboot
 
 '''
+
+def cluster_start(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    _assert_args(zz, ['user', 'hosts', 'host_d', 'guest_d', 'ssh_port', 'source_uri'])
+    # Needed because jupyterhub puts {username} in the notebook d
+    zz['guest_d'] = zz['guest_d'].format(**zz)
+    zz['host_d'] = zz['host_d'].format(**zz)
+    if os.path.exists(zz['host_d']):
+        return _ret_merge(
+            zz,
+            ret,
+            {
+                'result': False,
+                'comment': '{}: directory exists, remove first'.format(zz['host_d']),
+            },
+        )
+    x = os.path.dirname(zz['host_d'])
+    if not os.path.exists(x):
+        return _ret_merge(
+            zz,
+            ret,
+            {
+                'result': False,
+                'comment': '{}: directory does not exist, start container'.format(x),
+            },
+        )
+    prev_d = os.getcwd()
+    _call_state(
+        'plain_directory',
+        {
+            'name': zz['container_name'] + '.host_d',
+            'dir_name': zz['host_d'],
+        },
+        ret,
+    )
+    with _chdir(zz['host_d']):
+        _cluster_config_master(zz, zz['guest_d'], ret)
+        for host in zz['hosts']:
+            _cluster_config_host(zz, zz['guest_d'], host, ret)
+    _sh('chown -R {}:{} {}'.format(zz['user'], zz['group'], zz['host_d']), ret)
+    _sh('chmod -R go= {}'.format(zz['host_d']), ret)
+
+    '''
+for h in "${hosts[@]}"; do
+    echo "$h" >> "$hosts_f"
+    export DOCKER_CERT_PATH=$cert_d
+    cmd=( docker --tlsverify --host="$h" )
+    ${cmd[@]} run -v $notebook_d
+    known hosts
+RADIA_RUN="/usr/bin/sshd -D -f $sshd_config"
+    '''
+    return ret
 
 def docker_container(**kwargs):
     """Initiate a docker container as a systemd service."""
@@ -67,7 +123,6 @@ def docker_container(**kwargs):
             'contents': zz['systemd_contents'],
             'user': 'root',
             'group': 'root',
-            'mode': '550',
             'zz': zz,
         },
         ret,
@@ -79,8 +134,6 @@ def docker_container(**kwargs):
                 {
                     'name': zz['container_name'] + '.directory.' + v[0],
                     'dir_name': v[0],
-                    'user': zz['host_user'],
-                    'group': zz['host_user'],
                 },
                 ret,
             )
@@ -128,7 +181,6 @@ def docker_service(**kwargs):
             'contents_pillar': 'radia:docker_service:sysconfig_contents',
             'user': 'root',
             'group': 'root',
-            'mode': '400',
             'zz': zz,
         },
         ret,
@@ -183,6 +235,35 @@ def docker_sock_semodule(**kwargs):
     return ret
 
 
+def docker_tls_client(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    _assert_args(zz, ['cert_d'])
+    _call_state(
+        'plain_directory',
+        {
+            'name': 'docker_tls_client.' + zz['cert_d'],
+            'dir_name': zz['cert_d'],
+        },
+        ret,
+    )
+    _assert_args(zz, _DOCKER_TLS_FLAGS)
+    for k in _DOCKER_TLS_FLAGS:
+        b = 'ca' if k == 'tlscacert' else k[3:]
+        f = os.path.join(zz['cert_d'], b + '.pem')
+        _call_state(
+            'plain_file',
+            {
+                'name': 'docker_service_tls.' + f,
+                'file_name': f,
+                'contents': zz[k],
+            },
+            ret,
+        )
+    return ret
+
+
 def file_append(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
@@ -231,7 +312,6 @@ def minion_update(**kwargs):
                 'source': f,
                 'user': 'root',
                 'group': 'root',
-                'mode': '400',
             },
             ret,
         )
@@ -274,7 +354,7 @@ def nfs_mount(**kwargs):
             'dir_name': zz['local_dir'],
             'user': zz['user'],
             'group': zz['group'],
-            'mode': zz['mode'],
+            'dir_mode': zz['dir_mode'],
         },
         ret,
     )
@@ -343,11 +423,11 @@ def timesync_service(**kwargs):
         if ret['result']:
             _ret_merge(
                 zz,
+                ret,
                 {
                     'changes': {'new': 'timedatectl set-ntp true'},
                     'comment': 'ntp turned on',
                 },
-                ret,
             )
     # Although set-ntp should turn on and enable the daemon,
     # it doesn't seem to on Fedora. This is safe to do.
@@ -355,6 +435,12 @@ def timesync_service(**kwargs):
 
 def _any(items, obj):
     return any(k in obj for k in items)
+
+
+def _assert_args(zz, args):
+    for a in args:
+        if not (a in zz and zz[a]):
+            raise ValueError('{}: parameter required'.format(a))
 
 
 def _assert_name(zz_or_name):
@@ -386,6 +472,89 @@ def _call_state(state, kwargs, ret):
 
 def _caller():
     return inspect.currentframe().f_back.f_back.f_code.co_name
+
+
+@contextlib.contextmanager
+def _chdir(d):
+    prev_d = os.getcwd()
+    try:
+        os.chdir(d)
+        yield d
+    finally:
+        os.chdir(prev_d)
+
+
+def _cluster_config_host(zz, guest_d, host, ret):
+
+    def guest_f(f):
+        return os.path.join(guest_d, host, f)
+
+    tag='XYZZY'
+    res = _sh('docker --tlsverify --host="{}" inspect -f {} {}'.format(host, tag, zz['container_name']), ret, ignore_errors=True)
+    if tag in res:
+        return _ret_merge(zz, ret, {'result': False, 'comment': '{}: container {} exists, need to radia.cluster_stop'.format(host, zz['container_name'])})
+    d = os.path.join(os.getcwd(), host)
+    _call_state(
+        'plain_directory',
+        {
+            'name': zz['name'] + '.' + host,
+            'dir_name': d,
+        },
+        ret,
+    )
+    with _chdir(d):
+        _sh('ssh-keygen -t ecdsa -N "" -f ssh_host_ecdsa_key', ret)
+        zz['host_key'] = guest_f('ssh_host_ecdsa_key')
+        with open('ssh_host_ecdsa_key.pub') as f:
+            key = f.read()
+        with open('../known_hosts', 'a') as f:
+            f.write('{}:{} {}'.format(host, zz['ssh_port'], key))
+        _call_state(
+            'plain_file',
+            {
+                'name': zz['name'] + '.sshd_config',
+                'file_name': os.path.join(os.getcwd(), 'sshd_config'),
+                'source': os.path.join(zz['source_uri'], 'sshd_config'),
+                'zz': zz,
+            },
+            ret,
+        )
+
+
+def _cluster_config_master(zz, guest_d, ret):
+
+    def guest_f(f):
+        return os.path.join(guest_d, f)
+
+    _sh('ssh-keygen -t rsa -N "" -f id_rsa', ret)
+    zz['identity_file'] = guest_f('id_rsa')
+    zz['user_known_hosts_file'] = guest_f('known_hosts')
+    zz['authorized_keys_file'] = guest_f('id_rsa.pub')
+    zz['ssh_cmd'] = '/usr/bin/ssh -F {}'.format(guest_f('ssh_config'))
+    zz['hosts_f'] = guest_f('hosts')
+    for sn in 'run.sh', 'ssh.sh', 'ssh_config':
+        fn = sn.replace('.sh', '')
+        _call_state(
+            'plain_file',
+            {
+                'name': zz['name'] + '.' + fn,
+                'file_name': os.path.join(os.getcwd(), fn),
+                'source': os.path.join(zz['source_uri'], sn),
+                'mode': 400 if fn == sn else 500,
+                'zz': zz,
+            },
+            ret,
+        )
+    _call_state(
+        'docker_tls_client',
+        {
+            'name': zz['name'] + '.' + 'docker_tls_client',
+            'cert_d': os.getcwd(),
+        },
+        ret,
+    )
+    with open('hosts', 'w') as f:
+        f.write('\n'.join(zz['hosts']) + '\n')
 
 
 def _debug(fmt, *args, **kwargs):
@@ -467,9 +636,7 @@ def _docker_container_args_pairs(zz):
 def _docker_container_init(zz, ret):
     if not (ret['result'] and 'init' in zz):
         return ret
-    for r in 'sentinel', 'cmd':
-        if not r in zz['init']:
-            raise ValueError('init.{} required'.format(r))
+    _assert_args(zz['init'], ['sentinel', 'cmd'])
     zz = _docker_container_init_args(zz)
     s = zz['sentinel']
     if not os.path.isabs(s):
@@ -536,11 +703,13 @@ def _docker_image_exists(image, ret):
 
 
 def _docker_service_tls(zz, ret):
-    if not ret['result'] or not zz['tlskey']:
+    if not (ret['result'] and _DOCKER_TLS_FLAGS[0] in zz):
+        zz['tls_options'] = ''
         return ret
     opts = '--host=tcp://0.0.0.0:{} --host=unix://{} --tlsverify'.format(
         zz['tls_port'], zz['sock'])
-    for k in 'tlskey', 'tlscert', 'tlscacert':
+    _assert_args(zz, _DOCKER_TLS_FLAGS)
+    for k in _DOCKER_TLS_FLAGS:
         f = os.path.join('/etc/docker', k + '.pem')
         _call_state(
             'plain_file',

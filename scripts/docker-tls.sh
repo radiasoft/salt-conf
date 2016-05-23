@@ -56,5 +56,5 @@ for host in "$@"; do
     create_yml docker_service "$host" "subjectAltName = IP:$ip,IP:127.0.0.1"
 done
 
-create_yml docker_master_client docker-master-client 'extendedKeyUsage = clientAuth'
+create_yml docker_tls_client client 'extendedKeyUsage = clientAuth'
 chmod -R go-rwx .

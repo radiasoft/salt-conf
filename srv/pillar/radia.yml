@@ -15,6 +15,16 @@ radia:
       require: []
       include: True
 
+  cluster_start:
+    container_name: radia-mpi-host
+    #guest_d: ''
+    #host_d: ''
+    #hosts: []
+    source_uri: 'salt://cluster'
+    ssh_port: 8888
+    user: '{{ zz.user }}'
+    group: '{{ zz.user }}'
+
   docker:
     service_name: docker
 
@@ -51,10 +61,10 @@ radia:
       - docker
       - lvm2
     tls_port: 2376
-    tlscacert: ''
-    tlscert: ''
-    tlskey: ''
-    tls_options: ''
+    #tlscacert: ''
+    #tlscert: ''
+    #tlskey: ''
+    #tls_options: ''
     sock: "{{ zz.docker_sock }}"
     sock_group: "{{ zz.docker_group }}"
 {% raw %}
@@ -62,6 +72,12 @@ radia:
       # Managed by @radiasoft/salt-conf
       OPTIONS='--selinux-enabled --log-driver=journald {{ zz.tls_options }}'
 {% endraw %}
+
+  docker_tls_client:
+    #cert_d: ''
+    #tlscacert: ''
+    #tlscert: ''
+    #tlskey: ''
 
   docker_sock_semodule:
     # policy names seem to be alphanum only
@@ -105,6 +121,7 @@ radia:
     mode: 755
 
   plain_directory:
+    dir_mode: "{{ zz.dir_mode }}"
     group: "{{ zz.user }}"
     makedirs: True
     user: "{{ zz.user }}"

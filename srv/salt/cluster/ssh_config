@@ -1,0 +1,3 @@
+Port {{ zz.ssh_port }}
+UserKnownHostsFile {{ zz.user_known_hosts_file }}
+IdentityFile {{ zz.identity_file }}

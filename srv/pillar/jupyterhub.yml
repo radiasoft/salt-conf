@@ -4,6 +4,8 @@
 # Use scripts/jupyterhub_secret.py to generate passwords and (fake) OAuth keys
 #
 {% set zz = dict(
+    guest_notebook_d='/home/' + stack.jupyter.guest_user + '/jupyter',
+    host_notebook_d=stack.jupyter.root_notebook_d + '/{username}',
     jupyterhub_conf_f='jupyterhub_config.py',
     jupyterhub_guest_conf_d='/srv/jupyterhub/conf',
     jupyterhub_host_conf_d='/var/lib/jupyterhub/conf',
@@ -20,6 +22,10 @@ radia:
       require:
         - utilities
         - jupyter
+
+  cluster_start:
+    host_d: {{ zz.host_notebook_d }}/radia-mpi
+    guest_d: {{ zz.guest_notebook_d }}/radia-mpi
 
 jupyterhub:
   authenticator_class: oauthenticator.GitHubOAuthenticator
@@ -38,7 +44,6 @@ jupyterhub:
     c.DockerSpawner.use_internal_ip = True
     # Remove containers when the user stops them
     c.DockerSpawner.remove_containers = True
-    {% if pillar.jupyter.root_notebook_d %}
     import os.path, pwd
     class _Spawner(DockerSpawner):
         def _volumes_to_binds(self, *args, **kwargs):
@@ -52,16 +57,12 @@ jupyterhub:
             return binds
     c.JupyterHub.spawner_class = _Spawner
     c.DockerSpawner.volumes = {
-        '{{ pillar.jupyter.root_notebook_d }}/{username}': {
+        '{{ pillar.jupyterhub.host_notebook_d }}': {
             # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
-            'bind': '/home/{{ pillar.jupyter.guest_user }}/jupyter',
+            'bind': '{{ pillar.jupyterhub.guest_notebook_d }}',
             # NFS is allowed globally the "Z" modifies an selinux context for non-NFS files
-            {% if not pillar.jupyter.nfs_local_d %}
-            'mode': 'Z',
-            {% endif %}
         },
     }
-    {% endif %}
     c.GitHubOAuthenticator.client_id = '{{ pillar.jupyterhub.github_client_id }}'
     c.GitHubOAuthenticator.client_secret = '{{ pillar.jupyterhub.github_client_secret }}'
     c.GitHubOAuthenticator.oauth_callback_url = 'https://{{ pillar.jupyterhub.host_name }}/hub/oauth_callback'
@@ -82,11 +83,13 @@ jupyterhub:
   debug: true
   guest_conf_d: '{{ zz.jupyterhub_guest_conf_d }}'
   guest_conf_f: '{{ zz.jupyterhub_guest_conf_d }}/{{ zz.jupyterhub_conf_f }}'
+  guest_notebook_d: '{{ zz.guest_notebook_d }}'
   guest_port: 8000
   guest_user: root
   host_conf_d: '{{ zz.jupyterhub_host_conf_d }}'
   host_conf_f: '{{ zz.jupyterhub_host_conf_d }}/{{ zz.jupyterhub_conf_f }}'
   host_name: localhost
+  host_notebook_d: '{{ zz.host_notebook_d }}'
   host_port: 8000
   host_user: root
   image_name: radiasoft/jupyterhub

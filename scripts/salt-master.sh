@@ -5,7 +5,8 @@
 set -e
 
 : ${master_ip:=10.10.10.10}
-: ${minion_id:=z30.bivio.biz}
+: ${jupyterhub_minion_id:=z30.bivio.biz}
+: ${mpi_minion_id:=z40.bivio.biz}
 
 cd "$(dirname $0)/.."
 pwd
@@ -50,6 +51,7 @@ _sudo_append() {
 #
 root_dir=$PWD/run
 nfs_d=$root_dir/nfs
+nfs_local_d=/var/nfs/jupyter
 salt_d=$root_dir/srv/salt
 minion_conf=99-radia-dev.conf
 mkdir -p $root_dir/{etc/salt/{master.d,pki},var/cache/salt,var/log/salt,var/run/salt,secrets} \
@@ -73,6 +75,8 @@ fi
 # Always export
 sudo exportfs -av
 
+bash scripts/docker-tls.sh "$mpi_minion_id"
+
 #
 # Local config. Redo by removing run directory:
 #
@@ -81,7 +85,8 @@ sudo exportfs -av
 _link ../../../etc/master "$root_dir/etc/salt/master"
 # can't use run/srv/pillar, b/c cfg files are relative to the file
 # they are imported from so doesn't act like salt file server
-_link ../systems/jupyterhub-dev.cfg "srv/pillar/minions/$minion_id.cfg"
+_link ../systems/jupyterhub-dev.cfg "srv/pillar/minions/$jupyterhub_minion_id.cfg"
+_link ../systems/jupyterhub-mpi-dev.cfg "srv/pillar/minions/$mpi_minion_id.cfg"
 
 _create run/etc/salt/master.d/99-dev.conf <<EOF
 auto_accept: true
@@ -106,12 +111,17 @@ EOF
 
 _create srv/pillar/secrets/jupyter-dev.yml force <<EOF
 jupyter:
-  nfs_local_d: /var/nfs/jupyter
+  nfs_local_d: "$nfs_local_d"
   nfs_remote_d: "$master_ip:$nfs_d"
-  root_notebook_d: /var/nfs/jupyter
+  root_notebook_d: "$nfs_local_d"
 EOF
 
 _create srv/pillar/secrets/jupyterhub-dev.yml force <<EOF
+radia:
+  cluster_start:
+    username: vagrant
+    hosts: [ $mpi_minion_id ]
+
 jupyterhub:
   admin_users:
   - vagrant

@@ -203,6 +203,15 @@ Executing on the minion gives more information:
 sudo salt-call -l debug state.apply 2>&1 | tee err
 ```
 
+#### Cluster
+
+On cluster master:
+
+```
+rm -rf /var/nfs/jupyter/vagrant/radia-mpi; salt-call -l quiet saltutil.sync_all; salt-call -l quiet saltutil.refresh_pillar; salt-call state.apply jupyterhub-cluster
+```
+
+
 #### References
 
 [General discussion in Utilities Wiki.](https://github.com/radiasoft/utilities/wiki/Salt)
