@@ -37,10 +37,11 @@ create_yml() {
 from __future__ import print_function
 import re
 
+indent = re.compile('^', flags=re.MULTILINE)
 print('radia:\n  $pillar:')
 for k, f in ('tlskey', '$host.key'), ('tlscacert', 'ca.crt'), ('tlscert', '$host.crt'):
     print('    {0}: |'.format(k))
-    print(re.sub('^', '      ', open(f).read(), flags=re.MULTILINE))
+    print(indent.sub('      ', open(f).read()))
 EOF
     chmod ug=r,o-rwx "$yml"
     echo "Created: $yml"
