@@ -9,7 +9,6 @@ if (( $# == 0 )); then
 fi
 
 cd "$(dirname $0)/.."
-umask 077
 mkdir -p docker-tls
 cd docker-tls
 if [[ ! -f ca.crt ]]; then
@@ -57,4 +56,4 @@ for host in "$@"; do
 done
 
 create_yml docker_master_client docker-master-client 'extendedKeyUsage = clientAuth'
-chmod go-rwx docker-tls
+chmod -R go-rwx docker-tls
