@@ -51,7 +51,9 @@ salt_d=$root_dir/srv/salt
 minion_conf=99-radia-dev.conf
 mkdir -p $root_dir/{etc/salt/{master.d,pki},var/cache/salt,var/log/salt,var/run/salt,secrets} \
       "$nfs_d" "$salt_d"
-chmod 755 "$nfs_d"
+sudo exportfs -u -v "*:$nfs_d" || true
+sudo chown vagrant:vagrant "$nfs_d"
+sudo chmod 755 "$nfs_d"
 
 #
 # Global actions
@@ -64,9 +66,10 @@ fi
 # Need no_root_squash, b/c $PWD is not accessible by root
 if _sudo_append /etc/hosts.allow 'rpcbind portmap lockd statd mountd rquotad: ALL' \
     || _sudo_append /etc/exports "$nfs_d *(rw,no_root_squash,sync)"; then
-    sudo exportfs -av
     sudo systemctl restart nfs
 fi
+# Always export
+sudo exportfs -av
 
 #
 # Local config. Redo by removing run directory:

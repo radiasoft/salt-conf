@@ -35,6 +35,8 @@ jupyterhub:
     c.Authenticator.admin_users = set(['{{ pillar.jupyterhub.admin_users|join("', '") }}'])
     c.DockerSpawner.container_image = '{{ pillar.jupyterhub.jupyter_singleuser_image }}'
     c.DockerSpawner.use_internal_ip = True
+    # Remove containers when the user stops them
+    c.DockerSpawner.remove_containers = True
     {% if pillar.jupyterhub.root_notebook_d %}
     import os.path, pwd
     class _Spawner(DockerSpawner):

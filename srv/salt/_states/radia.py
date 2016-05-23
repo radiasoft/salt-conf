@@ -119,9 +119,23 @@ def docker_service(**kwargs):
     if not ret['result']:
         return ret
     _call_state('host_user', {}, ret)
+    _docker_service_tls(zz, ret)
+    _call_state(
+        'plain_file',
+        {
+            'name': 'docker_service.sysconfig',
+            'file_name': '/etc/sysconfig/docker',
+            'contents_pillar': 'radia:docker_service:sysconfig_contents',
+            'user': 'root',
+            'group': 'root',
+            'mode': '400',
+            'zz': zz,
+        },
+        ret,
+    )
     zz['service_name'] = 'docker'
     # Ignore incoming name as it doesn't matter for the rest
-    if _service_status(zz)[0]:
+    if _service_status(zz)[0] and not ret['changes']:
         _ret_merge(zz, ret, {'comment': 'service is running'})
     else:
         _call_state('pkg_installed', {'name': 'docker_service.pkgs', 'pkgs': zz['required_pkgs']}, ret)
@@ -285,20 +299,6 @@ def nfs_mount(**kwargs):
     return ret
 
 
-
-def ntpd_service(**kwargs):
-    zz, ret = _state_init(kwargs)
-    if not ret['result']:
-        return ret
-    # Ignore incoming name as it doesn't matter for the rest
-    if _service_status(zz)[0]:
-        _ret_merge(zz, ret, {'comment': 'service is running'})
-    else:
-        _call_state('pkg_installed', {'name': 'ntpd_service.pkgs', 'pkgs': zz['required_pkgs']}, ret)
-        _service_restart(zz, ret)
-    return ret
-
-
 def plain_directory(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
@@ -332,6 +332,26 @@ def pkg_installed(**kwargs):
     _call_state('pkg.installed', zz, ret)
     return ret
 
+
+def timesync_service(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    zz['service_name'] = 'systemd-timesyncd'
+    if not 'Network time on: yes' in _sh('timedatectl status', ret):
+        _sh('timedatectl set-ntp true', ret)
+        if ret['result']:
+            _ret_merge(
+                zz,
+                {
+                    'changes': {'new': 'timedatectl set-ntp true'},
+                    'comment': 'ntp turned on',
+                },
+                ret,
+            )
+    # Although set-ntp should turn on and enable the daemon,
+    # it doesn't seem to on Fedora. This is safe to do.
+    return _service_restart(zz, ret)
 
 def _any(items, obj):
     return any(k in obj for k in items)
@@ -513,6 +533,29 @@ def _docker_image_exists(image, ret):
     pat = '(?:^|/)' + image.replace(':', r'\s+') + r'\s+'
     res = res and re.search(pat, res, flags=re.MULTILINE + re.IGNORECASE)
     return res, ret
+
+
+def _docker_service_tls(zz, ret):
+    if not ret['result'] or not zz['tlskey']:
+        return ret
+    opts = '--host=tcp://0.0.0.0:{} --host=unix://{} --tlsverify'.format(
+        zz['tls_port'], zz['sock'])
+    for k in 'tlskey', 'tlscert', 'tlscacert':
+        f = os.path.join('/etc/docker', k + '.pem')
+        _call_state(
+            'plain_file',
+            {
+                'name': 'docker_service_tls.' + f,
+                'file_name': f,
+                'contents': zz[k],
+                'user': 'root',
+                'group': 'root',
+            },
+            ret,
+        )
+        opts += ' --{} {}'.format(k, f)
+    zz['tls_options'] = opts
+    return ret
 
 
 def _host_user_uid(zz, ret):
@@ -718,6 +761,8 @@ def _sh(cmd, ret, ignore_errors=False):
             stderr=subprocess.PIPE,
         )
         stdout, stderr = p.communicate()
+        stdout = stdout.decode('ascii', 'ignore')
+        stderr = stderr.decode('ascii', 'ignore')
         _debug('stdout={}', stdout)
         _debug('stderr={}', stderr)
         p.wait()

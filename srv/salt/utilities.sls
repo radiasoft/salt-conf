@@ -15,5 +15,5 @@ screenrc_config:
     - file_name: /etc/screenrc
     - text: "escape ^^^^"
 
-ntpd_service:
-  radia.ntpd_service: []
+timesync_service:
+  radia.timesync_service: []

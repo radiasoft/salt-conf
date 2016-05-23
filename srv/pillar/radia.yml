@@ -47,11 +47,21 @@ radia:
   docker_image: {}
 
   docker_service:
-    sock: "{{ zz.docker_sock }}"
-    sock_group: "{{ zz.docker_group }}"
     required_pkgs:
       - docker
       - lvm2
+    tls_port: 2376
+    tlscacert: ''
+    tlscert: ''
+    tlskey: ''
+    tls_options: ''
+    sock: "{{ zz.docker_sock }}"
+    sock_group: "{{ zz.docker_group }}"
+{% raw %}
+    sysconfig_contents: |
+      # Managed by @radiasoft/salt-conf
+      OPTIONS='--selinux-enabled --log-driver=journald {{ zz.tls_options }}'
+{% endraw %}
 
   docker_sock_semodule:
     # policy names seem to be alphanum only
@@ -84,20 +94,15 @@ radia:
     config_source:
       - 'salt://minion/90-radia.conf'
 
+  mod_init:
+    inventory: '/var/lib/radia-salt/inventory/{now}.yml'
+
   nfs_mount:
     fstab: /etc/fstab
     options: 'nolock'
     user: root
     group: root
     mode: 755
-
-  ntpd_service:
-    service_name: ntpd
-    required_pkgs:
-      - ntp
-
-  mod_init:
-    inventory: '/var/lib/radia-salt/inventory/{now}.yml'
 
   plain_directory:
     group: "{{ zz.user }}"
@@ -113,3 +118,5 @@ radia:
     user: "{{ zz.user }}"
 
   pkg_installed: {}
+
+  timesync_service: {}
