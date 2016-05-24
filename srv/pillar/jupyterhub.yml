@@ -24,8 +24,8 @@ radia:
         - jupyter
 
   cluster_start:
-    host_d: '{{ zz.host_notebook_d }}/radia-mpi'
-    guest_d: '{{ zz.guest_notebook_d }}/radia-mpi'
+    host_root_d: '{{ zz.host_notebook_d }}'
+    guest_root_d: '{{ zz.guest_notebook_d }}'
     image_name: '{{ stack.jupyter.image_name }}'
 
 jupyterhub:

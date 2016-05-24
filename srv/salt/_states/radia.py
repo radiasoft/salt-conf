@@ -27,6 +27,8 @@ import tempfile
 import time
 import yaml
 
+radia = None
+
 _initialized = False
 
 # Very conservative unquoted shell command argument
@@ -68,11 +70,10 @@ def cluster_start(**kwargs):
         ret,
     )
     with _chdir(zz['host_d']):
-        zz['host_root_d'] = os.getcwd()
         _cluster_config_master(zz, zz['guest_d'], ret)
         for host in zz['hosts']:
             _cluster_config_host(zz, zz['guest_d'], host, ret)
-    _sh('chown -R {user}:{group} {host_d}'.format(**zz), ret)
+    _sh('chown -R {host_user}:{host_user} {host_d}'.format(**zz), ret)
     _sh('chmod -R go= {host_d}'.format(**zz), ret)
     return _cluster_start_containers(zz, ret)
 
@@ -118,10 +119,7 @@ def docker_image(**kwargs):
     _call_state('docker_service', {}, ret)
     if not ret['result']:
         return ret
-    i = zz['image_name']
-    _assert_name(i)
-    if not ':' in i:
-        i += ':' + _assert_name(__pillar__['pykern']['channel'])
+    i = _docker_image_name(zz['image_name'])
     exists, ret = _docker_image_exists(i, ret)
     if not ret['result']:
         return ret
@@ -467,7 +465,7 @@ def _cluster_config_host(zz, guest_d, host, ret):
     res = _sh('docker --tlsverify --host="{}" inspect -f {} {}'.format(host, tag, zz['container_name']), ret, ignore_errors=True)
     if tag in res:
         return _ret_merge(zz, ret, {'result': False, 'comment': '{}: container {} exists, need to radia.cluster_stop'.format(host, zz['container_name'])})
-    d = os.path.join(zz['host_root_d'], host)
+    d = os.path.join(zz['host_d'], host)
     _call_state(
         'plain_directory',
         {
@@ -483,16 +481,9 @@ def _cluster_config_host(zz, guest_d, host, ret):
             key = f.read()
         with open('../known_hosts', 'a') as f:
             f.write('{}:{} {}'.format(host, zz['ssh_port'], key))
-        _call_state(
-            'plain_file',
-            {
-                'name': zz['name'] + '.sshd_config',
-                'file_name': os.path.join(d, 'sshd_config'),
-                'source': os.path.join(zz['source_uri'], 'sshd_config'),
-                'zz': zz,
-            },
-            ret,
-        )
+        zz.setdefault('_guest_cmd', {})[host] = guest_f('_sshd')
+        _cluster_config_plain_file(
+            zz, ret, host_f, ('sshd_config', '_sshd.sh'))
 
 
 def _cluster_config_master(zz, guest_d, ret):
@@ -500,26 +491,17 @@ def _cluster_config_master(zz, guest_d, ret):
     def guest_f(f):
         return os.path.join(guest_d, f)
 
+    def host_f(f):
+        return os.path.join(zz['host_d'], fn),
+
     _sh('ssh-keygen -t rsa -N "" -f id_rsa', ret)
     zz['identity_file'] = guest_f('id_rsa')
     zz['user_known_hosts_file'] = guest_f('known_hosts')
     zz['authorized_keys_file'] = guest_f('id_rsa.pub')
     zz['ssh_cmd'] = '/usr/bin/ssh -F {}'.format(guest_f('ssh_config'))
     zz['hosts_f'] = guest_f('hosts')
-    zz['cert_d'] = zz['host_root_d']
-    for sn in 'run.sh', 'ssh.sh', 'ssh_config':
-        fn = sn.replace('.sh', '')
-        _call_state(
-            'plain_file',
-            {
-                'name': zz['name'] + '.' + fn,
-                'file_name': os.path.join(zz['host_root_d'], fn),
-                'source': os.path.join(zz['source_uri'], sn),
-                'mode': 400 if fn == sn else 500,
-                'zz': zz,
-            },
-            ret,
-        )
+    zz['cert_d'] = zz['host_d']
+    _cluster_config_plain_file(zz, ret, host_f, ('run.sh', 'ssh.sh', 'ssh_config') )
     _call_state(
         'docker_tls_client',
         {
@@ -532,16 +514,35 @@ def _cluster_config_master(zz, guest_d, ret):
         f.write('\n'.join(zz['hosts']) + '\n')
 
 
+def _cluster_config_plain_file(zz, ret, host_f, basenames):
+    for sn in basenames:
+        fn = sn.replace('.sh', '')
+        _call_state(
+            'plain_file',
+            {
+                'name': zz['name'] + '.' + fn,
+                'file_name': host_f(fn),
+                'source': os.path.join(zz['source_uri'], sn),
+                'mode': 400 if fn == sn else 500,
+                'zz': zz,
+            },
+            ret,
+        )
+
+
 def _cluster_start_args(zz, ret):
-    _assert_args(zz, ['user', 'hosts', 'host_d', 'guest_d', 'ssh_port', 'source_uri'])
+    _assert_args(zz, ['user', 'hosts', 'host_root_d', 'guest_root_d', 'ssh_port', 'source_uri'])
     # Needed because jupyterhub puts {username} in the notebook d
-    zz['guest_d'] = zz['guest_d'].format(**zz)
-    zz['host_d'] = zz['host_d'].format(**zz)
+    zz['guest_root_d'] = zz['guest_root_d'].format(**zz)
+    zz['host_root_d'] = zz['host_root_d'].format(**zz)
+    if not os.path.exists(zz['host_root_d']):
+        return _err(
+            zz, ret,
+            '{}: host_root_d does not exist, start container', zz['host_root_d'])
+    zz['guest_d'] = os.path.join(zz['guest_root_d'], zz['conf_basename'])
+    zz['host_d'] = os.path.join(zz['host_root_d'], zz['conf_basename'])
     if os.path.exists(zz['host_d']):
         return _err(zz, ret, '{}: directory exists, remove first', zz['host_d'])
-    x = os.path.dirname(zz['host_d'])
-    if not os.path.exists(x):
-        return _err(zz, ret, '{}: directory does not exist, start container', x)
     return ret
 
 
@@ -549,17 +550,29 @@ def _cluster_start_containers(zz, ret):
     env = os.environ.copy()
     env['DOCKER_TLS_VERIFY'] = '1'
     env['DOCKER_CERT_PATH'] = zz['cert_d']
+    img = _docker_image_name(zz['image_name']),
+    zz['_image'] = img
     for host in zz['hosts']:
         env['DOCKER_HOST'] = 'tcp://{}:{}'.format(host, zz['docker_tls_port'])
         _call_state(
             'docker_image',
             {
                 'name': zz['name'] + '.image.' + host,
-                'image_name': zz['image_name'],
+                'image_name': img,
                 'want_update': True,
                 'docker_env': env,
             },
             ret,
+        )
+        zz['_cmd'] = zz['_guest_cmd'][host]
+        #TODO share;
+        _sh(
+            'docker run --tty --detach --logfile=journald --net=host'
+            ' --user {user} -e RADIA_RUN_CMD={_cmd}'
+            ' -v {host_root_d}:{guest_root_d}'
+            ' --name {container_name} {_image}'.format(**z),
+            ret,
+            env=env,
         )
     return ret
         # CREATE script that sets RADIARRUN which starts sshd,
@@ -592,7 +605,7 @@ def _docker_container_args(kwargs):
     if zz.get('want_docker_sock', False):
         f = zz['sock']
         start += ' -v {}:{}'.format(f, f)
-    start += ' ' + zz['image_name']
+    start += ' ' + _docker_image_name(zz['image_name'])
     #TODO: allow array or use sh -c
     cmd = zz.get('cmd', None)
     if cmd:
@@ -713,6 +726,13 @@ def _docker_image_exists(image, ret):
     return res, ret
 
 
+def _docker_image_name(image):
+    _assert_name(image)
+    if ':' in image:
+        return image
+    return image + ':' + _assert_name(__pillar__['pykern']['channel'])
+
+
 def _docker_service_tls(zz, ret):
     if not (ret['result'] and _DOCKER_TLS_FLAGS[0] in zz):
         zz['tls_options'] = ''
@@ -775,11 +795,13 @@ def _init_before_first_state():
     global _initialized
     if _initialized:
         return
-    global _inventory, _log
+    global _inventory, _log, radia
     _initialized = True
     _log = logging.getLogger(__name__)
+    _log.debug('_init_before_first_state')
     assert not __opts__['test'], 'test mode not supported'
     now = datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')
+    radia = __salt__['radia.module']()
     _inventory = _pillar(caller='mod_init', key='inventory').format(now=now)
     # The _inv() call in _call_state() happens after the
     # call to the state so it's safe to do this. This

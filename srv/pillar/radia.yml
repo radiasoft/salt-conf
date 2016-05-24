@@ -17,16 +17,17 @@ radia:
       include: True
 
   cluster_start:
-    #image_name: ''
+    conf_basename: mpi-run
     container_name: radia-mpi-host
     docker_tls_port: {{ zz.docker_tls_port }}
-    #guest_d: ''
-    #host_d: ''
+    #guest_root_d: ''
+    guest_user: '{{ zz.user }}'
+    #host_root_d: ''
+    host_user: '{{ zz.user }}'
     #hosts: []
+    #image_name: ''
     source_uri: 'salt://cluster'
     ssh_port: 8888
-    user: '{{ zz.user }}'
-    group: '{{ zz.user }}'
 
   docker:
     service_name: docker
@@ -98,6 +99,8 @@ radia:
       allow svirt_lxc_net_t docker_t:unix_stream_socket connectto;
       allow svirt_lxc_net_t docker_var_run_t:sock_file write;
 {% endraw %}
+
+  echo: {}
 
   file_append: {}
 
