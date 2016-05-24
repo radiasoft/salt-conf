@@ -57,30 +57,8 @@ def cluster_start(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
-    _assert_args(zz, ['user', 'hosts', 'host_d', 'guest_d', 'ssh_port', 'source_uri'])
-    # Needed because jupyterhub puts {username} in the notebook d
-    zz['guest_d'] = zz['guest_d'].format(**zz)
-    zz['host_d'] = zz['host_d'].format(**zz)
-    if os.path.exists(zz['host_d']):
-        return _ret_merge(
-            zz,
-            ret,
-            {
-                'result': False,
-                'comment': '{}: directory exists, remove first'.format(zz['host_d']),
-            },
-        )
-    x = os.path.dirname(zz['host_d'])
-    if not os.path.exists(x):
-        return _ret_merge(
-            zz,
-            ret,
-            {
-                'result': False,
-                'comment': '{}: directory does not exist, start container'.format(x),
-            },
-        )
-    prev_d = os.getcwd()
+    if not _cluster_start_args(zz, ret)['result']:
+        return ret
     _call_state(
         'plain_directory',
         {
@@ -90,22 +68,14 @@ def cluster_start(**kwargs):
         ret,
     )
     with _chdir(zz['host_d']):
+        zz['host_root_d'] = os.getcwd()
         _cluster_config_master(zz, zz['guest_d'], ret)
         for host in zz['hosts']:
             _cluster_config_host(zz, zz['guest_d'], host, ret)
-    _sh('chown -R {}:{} {}'.format(zz['user'], zz['group'], zz['host_d']), ret)
-    _sh('chmod -R go= {}'.format(zz['host_d']), ret)
+    _sh('chown -R {user}:{group} {host_d}'.format(**zz), ret)
+    _sh('chmod -R go= {host_d}'.format(**zz), ret)
+    return _cluster_start_containers(zz, ret)
 
-    '''
-for h in "${hosts[@]}"; do
-    echo "$h" >> "$hosts_f"
-    export DOCKER_CERT_PATH=$cert_d
-    cmd=( docker --tlsverify --host="$h" )
-    ${cmd[@]} run -v $notebook_d
-    known hosts
-RADIA_RUN="/usr/bin/sshd -D -f $sshd_config"
-    '''
-    return ret
 
 def docker_container(**kwargs):
     """Initiate a docker container as a systemd service."""
@@ -156,14 +126,18 @@ def docker_image(**kwargs):
     if not ret['result']:
         return ret
     new = {}
-    if exists:
+    if exists and not zz.get('want_update', False):
         new['comment'] = 'image already pulled'
     else:
-        _sh('docker pull ' + i, ret)
+        env = zz.get('docker_env', None)
+        res = _sh('docker pull {}'.format(i), ret, env=env)
         if not ret['result']:
             return ret
-        new['comment'] = 'image needed to be pulled'
-        new['changes'] = {'new': 'pull image'}
+        if 'up to date' in res:
+            new['comment'] = 'image is up to date'
+        else:
+            new['comment'] = 'image needed to be pulled'
+            new['changes'] = {'new': 'docker pull ' + i}
     return _ret_merge(i, ret, new)
 
 
@@ -243,7 +217,7 @@ def docker_tls_client(**kwargs):
     _call_state(
         'plain_directory',
         {
-            'name': 'docker_tls_client.' + zz['cert_d'],
+            'name': 'docker_tls_client.cert_d',
             'dir_name': zz['cert_d'],
         },
         ret,
@@ -255,7 +229,7 @@ def docker_tls_client(**kwargs):
         _call_state(
             'plain_file',
             {
-                'name': 'docker_service_tls.' + f,
+                'name': 'docker_tls_client.' + k,
                 'file_name': f,
                 'contents': zz[k],
             },
@@ -493,7 +467,7 @@ def _cluster_config_host(zz, guest_d, host, ret):
     res = _sh('docker --tlsverify --host="{}" inspect -f {} {}'.format(host, tag, zz['container_name']), ret, ignore_errors=True)
     if tag in res:
         return _ret_merge(zz, ret, {'result': False, 'comment': '{}: container {} exists, need to radia.cluster_stop'.format(host, zz['container_name'])})
-    d = os.path.join(os.getcwd(), host)
+    d = os.path.join(zz['host_root_d'], host)
     _call_state(
         'plain_directory',
         {
@@ -513,7 +487,7 @@ def _cluster_config_host(zz, guest_d, host, ret):
             'plain_file',
             {
                 'name': zz['name'] + '.sshd_config',
-                'file_name': os.path.join(os.getcwd(), 'sshd_config'),
+                'file_name': os.path.join(d, 'sshd_config'),
                 'source': os.path.join(zz['source_uri'], 'sshd_config'),
                 'zz': zz,
             },
@@ -532,13 +506,14 @@ def _cluster_config_master(zz, guest_d, ret):
     zz['authorized_keys_file'] = guest_f('id_rsa.pub')
     zz['ssh_cmd'] = '/usr/bin/ssh -F {}'.format(guest_f('ssh_config'))
     zz['hosts_f'] = guest_f('hosts')
+    zz['cert_d'] = zz['host_root_d']
     for sn in 'run.sh', 'ssh.sh', 'ssh_config':
         fn = sn.replace('.sh', '')
         _call_state(
             'plain_file',
             {
                 'name': zz['name'] + '.' + fn,
-                'file_name': os.path.join(os.getcwd(), fn),
+                'file_name': os.path.join(zz['host_root_d'], fn),
                 'source': os.path.join(zz['source_uri'], sn),
                 'mode': 400 if fn == sn else 500,
                 'zz': zz,
@@ -549,12 +524,48 @@ def _cluster_config_master(zz, guest_d, ret):
         'docker_tls_client',
         {
             'name': zz['name'] + '.' + 'docker_tls_client',
-            'cert_d': os.getcwd(),
+            'cert_d': zz['cert_d'],
         },
         ret,
     )
     with open('hosts', 'w') as f:
         f.write('\n'.join(zz['hosts']) + '\n')
+
+
+def _cluster_start_args(zz, ret):
+    _assert_args(zz, ['user', 'hosts', 'host_d', 'guest_d', 'ssh_port', 'source_uri'])
+    # Needed because jupyterhub puts {username} in the notebook d
+    zz['guest_d'] = zz['guest_d'].format(**zz)
+    zz['host_d'] = zz['host_d'].format(**zz)
+    if os.path.exists(zz['host_d']):
+        return _err(zz, ret, '{}: directory exists, remove first', zz['host_d'])
+    x = os.path.dirname(zz['host_d'])
+    if not os.path.exists(x):
+        return _err(zz, ret, '{}: directory does not exist, start container', x)
+    return ret
+
+
+def _cluster_start_containers(zz, ret):
+    env = os.environ.copy()
+    env['DOCKER_TLS_VERIFY'] = '1'
+    env['DOCKER_CERT_PATH'] = zz['cert_d']
+    for host in zz['hosts']:
+        env['DOCKER_HOST'] = 'tcp://{}:{}'.format(host, zz['docker_tls_port'])
+        _call_state(
+            'docker_image',
+            {
+                'name': zz['name'] + '.image.' + host,
+                'image_name': zz['image_name'],
+                'want_update': True,
+                'docker_env': env,
+            },
+            ret,
+        )
+    return ret
+        # CREATE script that sets RADIARRUN which starts sshd,
+        #_sh(cmd + 'pull ' + container_name
+        #${cmd[@]} run -v $notebook_d
+        #RADIA_RUN="/usr/bin/sshd -D -f $sshd_config"
 
 
 def _debug(fmt, *args, **kwargs):
@@ -727,6 +738,17 @@ def _docker_service_tls(zz, ret):
     return ret
 
 
+def _err(zz, ret, fmt, *args, **kwargs):
+    return _ret_merge(
+        zz,
+        ret,
+        {
+            'result': False,
+            'comment': fmt.format(*args, **kwargs),
+        },
+    )
+
+
 def _host_user_uid(zz, ret):
     """Ensure host_user's uid is what we expect.
 
@@ -858,9 +880,9 @@ def _ret_merge(name, ret, new):
             else:
                 ret[changes_type].update(new[changes_type])
     if 'comment' in new and new['comment']:
-        prefix = name + ': '
-        if new['comment'].startswith(prefix):
-            prefix = ''
+        prefix = ''
+        if not name in new['comment']:
+            prefix = name + ': '
         ret['comment'] += prefix + new['comment']
         if not ret['comment'].endswith('\n'):
             ret['comment'] += '\n'
@@ -914,7 +936,7 @@ def _service_status(zz, which=('active', 'enabled')):
     return status['active'] and status['enabled'], status
 
 
-def _sh(cmd, ret, ignore_errors=False):
+def _sh(cmd, ret, ignore_errors=False, env=None):
     if not ret['result']:
         return ''
     name = 'shell.' + cmd
@@ -923,12 +945,14 @@ def _sh(cmd, ret, ignore_errors=False):
     err = None
     try:
         _debug('cmd={}', cmd)
-        p = subprocess.Popen(
-            cmd,
+        kwargs = dict(
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+        if env:
+            kwargs['env'] = env
+        p = subprocess.Popen(cmd, **kwargs)
         stdout, stderr = p.communicate()
         stdout = stdout.decode('ascii', 'ignore')
         stderr = stderr.decode('ascii', 'ignore')

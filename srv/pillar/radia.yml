@@ -7,6 +7,7 @@
     dir_mode='700',
     docker_group='docker',
     docker_sock='/run/docker.sock',
+    docker_tls_port='2376',
 ) %}
 
 radia:
@@ -16,7 +17,9 @@ radia:
       include: True
 
   cluster_start:
+    #image_name: ''
     container_name: radia-mpi-host
+    docker_tls_port: {{ zz.docker_tls_port }}
     #guest_d: ''
     #host_d: ''
     #hosts: []
@@ -60,7 +63,7 @@ radia:
     required_pkgs:
       - docker
       - lvm2
-    tls_port: 2376
+    tls_port: {{ zz.docker_tls_port }}
     #tlscacert: ''
     #tlscert: ''
     #tlskey: ''

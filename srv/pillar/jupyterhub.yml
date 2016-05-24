@@ -24,8 +24,9 @@ radia:
         - jupyter
 
   cluster_start:
-    host_d: {{ zz.host_notebook_d }}/radia-mpi
-    guest_d: {{ zz.guest_notebook_d }}/radia-mpi
+    host_d: '{{ zz.host_notebook_d }}/radia-mpi'
+    guest_d: '{{ zz.guest_notebook_d }}/radia-mpi'
+    image_name: '{{ stack.jupyter.image_name }}'
 
 jupyterhub:
   authenticator_class: oauthenticator.GitHubOAuthenticator
