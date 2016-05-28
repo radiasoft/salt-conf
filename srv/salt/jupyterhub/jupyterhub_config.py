@@ -5,37 +5,20 @@ import base64, os
 import os.path, pwd
 import socket, random, errno
 
-# May be overwritten below
-c.JupyterHub.spawner_class = DockerSpawner
-
-c.Authenticator.admin_users = set(['{{ pillar.jupyterhub.admin_users|join("', '") }}'])
-c.DockerSpawner.container_image = '{{ pillar.jupyter.image_name }}'
-c.DockerSpawner.use_internal_ip = False
-# Remove containers when the user stops them
-c.DockerSpawner.remove_containers = True
 class _Spawner(DockerSpawner):
     def get_env(self):
         res = super(_Spawner, self).get_env()
         res['RADIA_RUN_PORT'] = str(self.container_port)
         return res
 
-    def get_ip_and_port(self):
-        # Need this yield statement to have "yield from" id dockerspawner.py work
-        # There may be a bug in dockerspawner.py
-        _dummy = yield self.docker('port', self.container_id, self.container_port)
+    async def get_ip_and_port(self):
         return self.container_ip, self.container_port
 
-    def start(self, image=None, extra_create_kwargs=None,
-        extra_start_kwargs=None, extra_host_config=None):
-        if not extra_start_kwargs:
-            extra_start_kwargs = {}
-        extra_start_kwargs['network_mode'] = 'host'
-        self.container_ip = '{{ pillar.jupyter.ip }}'
+    def start(self, *args, **kwargs):
         self.container_port = self.__compute_port()
-        return super(_Spawner, self).start( image, extra_create_kwargs, extra_start_kwargs, extra_host_config)
+        return super(_Spawner, self).start(*args, **kwargs)
 
     def _volumes_to_binds(self, *args, **kwargs):
-
         binds = super(_Spawner, self)._volumes_to_binds(*args, **kwargs)
         for v in binds:
             if not os.path.exists(v):
@@ -68,7 +51,12 @@ class _Spawner(DockerSpawner):
                 pass
         raise AssertionError('{}: unable to allocate port in range'.format(port_range))
 
-c.JupyterHub.spawner_class = _Spawner
+c.Authenticator.admin_users = set(['{{ pillar.jupyterhub.admin_users|join("', '") }}'])
+c.DockerSpawner.container_image = '{{ pillar.jupyter.image_name }}'
+c.DockerSpawner.container_ip = '{{ pillar.jupyter.ip }}'
+c.DockerSpawner.extra_start_kwargs= {'network_mode': 'host'}
+c.DockerSpawner.remove_containers = True
+c.DockerSpawner.use_internal_ip = True
 c.DockerSpawner.volumes = {
     '{{ pillar.jupyterhub.host_notebook_d }}': {
         # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
@@ -76,6 +64,7 @@ c.DockerSpawner.volumes = {
         # NFS is allowed globally the "Z" modifies an selinux context for non-NFS files
     },
 }
+
 c.GitHubOAuthenticator.client_id = '{{ pillar.jupyterhub.github_client_id }}'
 c.GitHubOAuthenticator.client_secret = '{{ pillar.jupyterhub.github_client_secret }}'
 c.GitHubOAuthenticator.oauth_callback_url = 'https://{{ pillar.jupyterhub.host_name }}/hub/oauth_callback'
@@ -87,6 +76,8 @@ c.JupyterHub.hub_ip = public_ips()[0]
 c.JupyterHub.ip = '0.0.0.0'
 c.JupyterHub.port = {{ pillar.jupyterhub.guest_port }}
 c.JupyterHub.proxy_auth_token = '{{ pillar.jupyterhub.proxy_auth_token }}'
+c.JupyterHub.spawner_class = _Spawner
+
 {% if pillar.jupyterhub.debug %}
 c.Application.log_level = 'DEBUG'
 # Might not want this, but for now it's useful to see everything
@@ -96,4 +87,5 @@ c.JupyterHub.log_level = 'DEBUG'
 c.LocalProcessSpawner.debug = True
 c.Spawner.debug = True
 {% endif %}
+
 {{ pillar.jupyterhub.aux_contents }}

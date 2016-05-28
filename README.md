@@ -143,7 +143,7 @@ You can clear the state by simply:
 
 ```bash
 rm -rf run
-bash scripts/salt-master.sh
+bash scripts/master.sh
 ```
 
 The master is setup for autoaccept.
