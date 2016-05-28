@@ -11,6 +11,7 @@ jupyter:
   host_user: '{{ stack.radia.docker_container.host_user }}'
   # POSIT: _states/radia.py assumes pykern.channel
   image_name: 'radiasoft/beamsim-jupyter:{{ stack.pykern.channel }}'
+  #ip: ''
   #nfs_local_d: ''
   #nfs_remote_d: ''
   #root_notebook_d: ''

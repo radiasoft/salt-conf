@@ -31,56 +31,6 @@ radia:
 jupyterhub:
   authenticator_class: oauthenticator.GitHubOAuthenticator
   aux_contents: ""
-{% raw %}
-  conf_contents: |
-    import base64, os
-    from dockerspawner import DockerSpawner
-    from jupyter_client.localinterfaces import public_ips
-
-    # May be overwritten below
-    c.JupyterHub.spawner_class = DockerSpawner
-
-    c.Authenticator.admin_users = set(['{{ pillar.jupyterhub.admin_users|join("', '") }}'])
-    c.DockerSpawner.container_image = '{{ pillar.jupyter.image_name }}'
-    c.DockerSpawner.use_internal_ip = True
-    # Remove containers when the user stops them
-    c.DockerSpawner.remove_containers = True
-    import os.path, pwd
-    class _Spawner(DockerSpawner):
-        def _volumes_to_binds(self, *args, **kwargs):
-            binds = super(_Spawner, self)._volumes_to_binds(*args, **kwargs)
-            for v in binds:
-                if not os.path.exists(v):
-                    os.mkdir(v)
-                    if '{{ pillar.jupyter.guest_user}}' != '{{ pillar.jupyterhub.guest_user}}':
-                        pw = pwd.getpwnam('{{ pillar.jupyter.guest_user}}')
-                        os.chown(v, pw.pw_uid, pw.pw_gid)
-            return binds
-    c.JupyterHub.spawner_class = _Spawner
-    c.DockerSpawner.volumes = {
-        '{{ pillar.jupyterhub.host_notebook_d }}': {
-            # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
-            'bind': '{{ pillar.jupyterhub.guest_notebook_d }}',
-            # NFS is allowed globally the "Z" modifies an selinux context for non-NFS files
-        },
-    }
-    c.GitHubOAuthenticator.client_id = '{{ pillar.jupyterhub.github_client_id }}'
-    c.GitHubOAuthenticator.client_secret = '{{ pillar.jupyterhub.github_client_secret }}'
-    c.GitHubOAuthenticator.oauth_callback_url = 'https://{{ pillar.jupyterhub.host_name }}/hub/oauth_callback'
-    c.JupyterHub.authenticator_class = '{{ pillar.jupyterhub.authenticator_class }}'
-    c.JupyterHub.confirm_no_ssl = True
-    c.JupyterHub.cookie_secret = base64.b64decode('{{ pillar.jupyterhub.cookie_secret }}')
-    c.JupyterHub.hub_ip = public_ips()[0]
-    c.JupyterHub.ip = '0.0.0.0'
-    c.JupyterHub.port = {{ pillar.jupyterhub.guest_port }}
-    c.JupyterHub.proxy_auth_token = '{{ pillar.jupyterhub.proxy_auth_token }}'
-    {% if pillar.jupyterhub.debug %}
-    c.Application.log_level = 'DEBUG'
-    c.Spawner.debug = True
-    c.LocalProcessSpawner.debug = True
-    {% endif %}
-    {{ pillar.jupyterhub.aux_contents }}
-{% endraw %}
   debug: true
   guest_conf_d: '{{ zz.jupyterhub_guest_conf_d }}'
   guest_conf_f: '{{ zz.jupyterhub_guest_conf_d }}/{{ zz.jupyterhub_conf_f }}'

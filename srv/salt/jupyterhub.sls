@@ -22,7 +22,7 @@ postgresql_jupyterhub_container:
 jupyterhub_config:
   radia.plain_file:
     - file_name: '{{ pillar.jupyterhub.host_conf_f }}'
-    - contents_pillar: jupyterhub:conf_contents
+    - source: salt://jupyterhub/jupyterhub_config.py
     - user: root
     - group: root
     - zz:

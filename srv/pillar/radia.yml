@@ -17,7 +17,7 @@ radia:
       include: True
 
   cluster_start:
-    conf_basename: mpi-run
+    conf_basename: radia-mpi
     container_name: radia-mpi-host
     docker_tls_port: {{ zz.docker_tls_port }}
     #guest_root_d: ''
@@ -28,6 +28,9 @@ radia:
     #image_name: ''
     source_uri: 'salt://cluster'
     ssh_port: 8888
+
+#  cluster_runner:
+#    timer:
 
   docker:
     service_name: docker

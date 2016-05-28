@@ -9,12 +9,13 @@ set -e
 : ${mpi_minion_id:=z40.bivio.biz}
 
 cd "$(dirname $0)/.."
-pwd
 
 if ! ip addr show eth1 | grep -s -q "$master_ip"; then
     echo "Call with master_ip=a.b.c.d bash $0" 1>&2
     exit 1
 fi
+
+jupyterhub_ip=$(dig +short "$jupyterhub_minion_id")
 
 _create() {
     local file=$1
@@ -111,6 +112,7 @@ EOF
 
 _create srv/pillar/secrets/jupyter-dev.yml force <<EOF
 jupyter:
+  ip: "$jupyterhub_ip"
   nfs_local_d: "$nfs_local_d"
   nfs_remote_d: "$master_ip:$nfs_d"
   root_notebook_d: "$nfs_local_d"

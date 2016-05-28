@@ -70,12 +70,21 @@ def cluster_start(**kwargs):
         ret,
     )
     with _chdir(zz['host_d']):
-        _cluster_config_master(zz, zz['guest_d'], ret)
+        _cluster_config_master(zz, ret)
         for host in zz['hosts']:
-            _cluster_config_host(zz, zz['guest_d'], host, ret)
+            _cluster_config_host(zz, ret, host)
     _sh('chown -R {host_user}:{host_user} {host_d}'.format(**zz), ret)
     _sh('chmod -R go= {host_d}'.format(**zz), ret)
     return _cluster_start_containers(zz, ret)
+
+
+def cluster_queue_check(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    #TODO(robnagler) unfinished
+    #timer service that looks in cluster_start dirs for
+    #radia-run-mpi.sh
 
 
 def docker_container(**kwargs):
@@ -389,6 +398,7 @@ def timesync_service(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
+    #TODO: assert ntp is not installed (screws up this code)
     zz['service_name'] = 'systemd-timesyncd'
     if not 'Network time on: yes' in _sh('timedatectl status', ret):
         _sh('timedatectl set-ntp true', ret)
@@ -456,10 +466,13 @@ def _chdir(d):
         os.chdir(prev_d)
 
 
-def _cluster_config_host(zz, guest_d, host, ret):
+def _cluster_config_host(zz, ret, host):
 
     def guest_f(f):
-        return os.path.join(guest_d, host, f)
+        return os.path.join(zz['guest_d'], host, f)
+
+    def host_f(f):
+        return os.path.join(zz['host_d'], host, f)
 
     tag='XYZZY'
     res = _sh('docker --tlsverify --host="{}" inspect -f {} {}'.format(host, tag, zz['container_name']), ret, ignore_errors=True)
@@ -486,13 +499,13 @@ def _cluster_config_host(zz, guest_d, host, ret):
             zz, ret, host_f, ('sshd_config', '_sshd.sh'))
 
 
-def _cluster_config_master(zz, guest_d, ret):
+def _cluster_config_master(zz, ret):
 
     def guest_f(f):
-        return os.path.join(guest_d, f)
+        return os.path.join(zz['guest_d'], f)
 
     def host_f(f):
-        return os.path.join(zz['host_d'], fn),
+        return os.path.join(zz['host_d'], f)
 
     _sh('ssh-keygen -t rsa -N "" -f id_rsa', ret)
     zz['identity_file'] = guest_f('id_rsa')
@@ -531,7 +544,7 @@ def _cluster_config_plain_file(zz, ret, host_f, basenames):
 
 
 def _cluster_start_args(zz, ret):
-    _assert_args(zz, ['user', 'hosts', 'host_root_d', 'guest_root_d', 'ssh_port', 'source_uri'])
+    _assert_args(zz, ['guest_user', 'host_user', 'hosts', 'host_root_d', 'guest_root_d', 'ssh_port', 'source_uri'])
     # Needed because jupyterhub puts {username} in the notebook d
     zz['guest_root_d'] = zz['guest_root_d'].format(**zz)
     zz['host_root_d'] = zz['host_root_d'].format(**zz)
@@ -550,35 +563,29 @@ def _cluster_start_containers(zz, ret):
     env = os.environ.copy()
     env['DOCKER_TLS_VERIFY'] = '1'
     env['DOCKER_CERT_PATH'] = zz['cert_d']
-    img = _docker_image_name(zz['image_name']),
-    zz['_image'] = img
+    zz['image_name'] = _docker_image_name(zz['image_name'])
     for host in zz['hosts']:
         env['DOCKER_HOST'] = 'tcp://{}:{}'.format(host, zz['docker_tls_port'])
         _call_state(
             'docker_image',
             {
                 'name': zz['name'] + '.image.' + host,
-                'image_name': img,
+                'image_name': zz['image_name'],
                 'want_update': True,
                 'docker_env': env,
             },
             ret,
         )
         zz['_cmd'] = zz['_guest_cmd'][host]
-        #TODO share;
         _sh(
-            'docker run --tty --detach --logfile=journald --net=host'
-            ' --user {user} -e RADIA_RUN_CMD={_cmd}'
+            'docker run --tty --detach --log-driver=journald --net=host'
+            ' --user {guest_user} -e RADIA_RUN_CMD={_cmd}'
             ' -v {host_root_d}:{guest_root_d}'
-            ' --name {container_name} {_image}'.format(**z),
+            ' --name {container_name} {image_name}'.format(**zz),
             ret,
             env=env,
         )
     return ret
-        # CREATE script that sets RADIARRUN which starts sshd,
-        #_sh(cmd + 'pull ' + container_name
-        #${cmd[@]} run -v $notebook_d
-        #RADIA_RUN="/usr/bin/sshd -D -f $sshd_config"
 
 
 def _debug(fmt, *args, **kwargs):
@@ -861,7 +868,7 @@ def _nfs_mount_selinux(zz, ret):
     )
 
 
-def _pillar(key=None, caller=None):
+def _pillar(key=None, caller=None, zz=None):
     full_key = ['radia', caller or _caller()]
     if key:
          full_key += key.split('.')
@@ -872,7 +879,12 @@ def _pillar(key=None, caller=None):
             raise KeyError('{}: pillar not found'.format('.'.join(full_key)))
         res = res[k]
     _debug('res={}', res)
-    return res
+    if not zz:
+        return res
+    for k, v in res.iteritems():
+        if not k in zz:
+            zz[k] = copy.deepcopy(v)
+    return zz
 
 
 def _require():
@@ -921,12 +933,15 @@ def _service_restart(zz, ret):
     comment = []
     updated = bool(ret['changes'])
     ok, status = _service_status(zz)
+    _debug('ok={}', ok)
+    _debug('updated={}', updated)
     if updated:
         _sh('systemctl daemon-reload', ret)
         if not ret['result']:
             return ret
         changes.append('daemon-reload')
     for s, op in (('enabled', 'reenable'), ('active', 'restart')):
+        _debug('{}={}', s, status[s])
         if not updated and status[s]:
             continue
         _sh('systemctl {} {}'.format(op, zz['service_name']), ret)
@@ -1007,9 +1022,7 @@ def _state_init(kwargs, caller=None):
         return None, ret
     _debug('low={}', __lowstate__)
     zz = copy.deepcopy(kwargs)
-    for k, v in _pillar(caller=caller or _caller()).iteritems():
-        if not k in zz:
-            zz[k] = copy.deepcopy(v)
+    _pillar(caller=caller or _caller(), zz=zz)
     _assert_name(zz)
     ret = _ret_init(zz)
     return zz, _ret_init(zz)
