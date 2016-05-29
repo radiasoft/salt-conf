@@ -40,11 +40,12 @@ class _Spawner(DockerSpawner):
             p = random.randint(*port_range)
             try:
                 # Short timeout since this should be a local connection
-                s = socket.create_connection((self.container_ip, p), timeout=0.5)
+                s = socket.create_connection((self.container_ip, p), timeout=1)
                 s.close()
             except socket.error as e:
-                # POSIT: Was not blocked by firewall
-                if e.errno == errno.ECONNREFUSED:
+                # POSIT: Ports are not blocked at firewall iwc this scheme
+                # does not work.
+                if e.errno in (errno.ECONNREFUSED, errno.EHOSTDOWN, errno.EHOSTUNREACH):
                     return p
             except Exception:
                 # Maybe didn't open the port
