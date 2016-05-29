@@ -1,0 +1,4 @@
+radia:
+  docker_service:
+    manage_iptables: false
+    disable_firewall: false

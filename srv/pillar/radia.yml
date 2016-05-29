@@ -17,8 +17,8 @@ radia:
       include: True
 
   cluster_start:
-    conf_basename: radia-mpi
-    container_name: radia-mpi-host
+    conf_basename: .radia-mpi
+    container_name: radia-mpi
     docker_tls_port: {{ zz.docker_tls_port }}
     #guest_root_d: ''
     guest_user: '{{ zz.user }}'
@@ -64,21 +64,23 @@ radia:
   docker_image: {}
 
   docker_service:
+    disable_firewall: true
+    manage_iptables: true
     required_pkgs:
       - docker
       - lvm2
-    tls_port: {{ zz.docker_tls_port }}
-    #tlscacert: ''
-    #tlscert: ''
-    #tlskey: ''
-    #tls_options: ''
     sock: "{{ zz.docker_sock }}"
     sock_group: "{{ zz.docker_group }}"
 {% raw %}
     sysconfig_contents: |
       # Managed by @radiasoft/salt-conf
-      OPTIONS='--selinux-enabled --log-driver=journald {{ zz.tls_options }}'
+      OPTIONS='--selinux-enabled --log-driver=journald --iptables={{ zz.manage_iptables|lower }} {{ zz.tls_options }}'
 {% endraw %}
+    #tlscacert: ''
+    #tlscert: ''
+    #tlskey: ''
+    #tls_options: ''
+    tls_port: {{ zz.docker_tls_port }}
 
   docker_tls_client:
     #cert_d: ''

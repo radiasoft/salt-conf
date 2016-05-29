@@ -112,18 +112,12 @@ EOF
 
 _create srv/pillar/secrets/jupyter-dev.yml force <<EOF
 jupyter:
-  ip: "$jupyterhub_ip"
   nfs_local_d: "$nfs_local_d"
   nfs_remote_d: "$master_ip:$nfs_d"
   root_notebook_d: "$nfs_local_d"
 EOF
 
 _create srv/pillar/secrets/jupyterhub-dev.yml force <<EOF
-radia:
-  cluster_start:
-    username: vagrant
-    hosts: [ $mpi_minion_id ]
-
 jupyterhub:
   admin_users:
   - vagrant
@@ -140,6 +134,16 @@ jupyterhub:
 postgresql_jupyterhub:
   admin_pass: 2euhoxplPzleKWLZ
 EOF
+
+_create srv/pillar/secrets/cluster-dev.yml force <<EOF
+radia:
+  cluster_start:
+    username: vagrant
+    host_root_d:
+    hosts: [ $mpi_minion_id ]
+
+EOF
+
 
 _create "$salt_d/$minion_conf" <<EOF
 log_level: debug

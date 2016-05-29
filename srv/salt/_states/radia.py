@@ -12,6 +12,7 @@
 """
 from __future__ import absolute_import, division, print_function
 
+import collections
 import contextlib
 import copy
 import datetime
@@ -30,6 +31,8 @@ import yaml
 radia = None
 
 _initialized = False
+
+_saved_returns = {}
 
 # Very conservative unquoted shell command argument
 _SHELL_SAFE_ARG = re.compile(r'^[-_/:\.\+,a-zA-Z0-9]+$')
@@ -92,7 +95,7 @@ def docker_container(**kwargs):
     # Needs to be set here for _caller() to be right
     zz, ret = _docker_container_args(kwargs)
     if not ret['result']:
-        return ret
+        return _save_ret(zz, ret)
     _call_state('docker_image', {'name': zz['name'] + '.image', 'image_name': zz['image_name']}, ret)
     _call_state('docker_sock_semodule', {}, ret)
     _call_state(
@@ -118,7 +121,7 @@ def docker_container(**kwargs):
                 ret,
             )
     _docker_container_init(zz, ret)
-    return _service_restart(zz, ret)
+    return _save_ret(zz, _service_restart(zz, ret))
 
 
 def docker_image(**kwargs):
@@ -154,6 +157,8 @@ def docker_service(**kwargs):
         return ret
     _call_state('host_user', {}, ret)
     _docker_service_tls(zz, ret)
+    if zz['disable_firewall']:
+        _service_disable({'service_name': 'firewalld'}, ret)
     _call_state(
         'plain_file',
         {
@@ -309,6 +314,26 @@ def minion_update(**kwargs):
             'comment': '\n*** YOU NEED TO RERUN THIS STATE unless it is minion_update ****\n',
         },
     )
+
+
+def mod_watch(**kwargs):
+    _debug('kwargs={}', kwargs)
+    if kwargs['sfun'] != 'docker_container':
+        raise AssertionError(
+            '{} radia.{}: cannot watch state "{}"'.format(
+                kwargs['name'],
+                kwargs['sfun'],
+                kwargs['__reqs__']['watch'][0]['__id__'],
+            ),
+        )
+    zz, ret = _docker_container_args(kwargs)
+    # We don't want to clobber previous returns
+    ret = _saved_returns[zz['name']]
+    if ret['changes'].get(zz['service_name']):
+        _debug('{}: already restarted', zz['service_name'])
+    else:
+        _service_restart(zz, ret, force=True)
+    return _save_ret(zz, ret)
 
 
 def nfs_export(**kwargs):
@@ -545,9 +570,9 @@ def _cluster_config_plain_file(zz, ret, host_f, basenames):
 
 def _cluster_start_args(zz, ret):
     _assert_args(zz, ['guest_user', 'host_user', 'hosts', 'host_root_d', 'guest_root_d', 'ssh_port', 'source_uri'])
-    # Needed because jupyterhub puts {username} in the notebook d
-    zz['guest_root_d'] = zz['guest_root_d'].format(**zz)
-    zz['host_root_d'] = zz['host_root_d'].format(**zz)
+    # Needed because jupyterhub puts {username} in the notebook
+    for x in 'guest_root_d', 'host_root_d':
+        zz[x] = zz[x].format(username=jupyterhub_user)
     if not os.path.exists(zz['host_root_d']):
         return _err(
             zz, ret,
@@ -589,9 +614,17 @@ def _cluster_start_containers(zz, ret):
 
 
 def _debug(fmt, *args, **kwargs):
+
+    def stringify(v):
+        if isinstance(v, (dict, list, collections.Sized)) and len(v) > 4:
+            return yaml.dump(v, default_flow_style=False, indent=2)
+        return v
+
     if not isinstance(fmt, str):
         fmt = '{}'
         args = [fmt]
+    args = [stringify(x) for x in args]
+    kwargs = dict((k, stringify(v)) for k, v in kwargs.items())
     s = ('{}.{}: ' + fmt).format('radia', _caller(), *args, **kwargs)
     _log.debug('%s', s)
 
@@ -898,7 +931,7 @@ def _ret_init(kwargs):
         'result': True,
         'changes': {},
         'pchanges': {},
-        'name': kwargs['name'],
+        'name': kwargs.get('name') or kwargs['service_name'],
         'comment': '',
     }
 
@@ -926,7 +959,37 @@ def _ret_merge(name, ret, new):
     return ret
 
 
-def _service_restart(zz, ret):
+def _save_ret(zz, ret):
+    _saved_returns[zz['name']] = ret
+    return ret
+
+def _service_disable(zz, ret):
+    if not ret['result']:
+        return ret
+    changes = []
+    comment = []
+    _, status = _service_status(zz)
+    for s, op in (('enabled', 'disable'), ('active', 'stop')):
+        _debug('{}={}', s, status[s])
+        if not status[s]:
+            continue
+        _sh('systemctl {} {}'.format(op, zz['service_name']), ret)
+        if not ret['result']:
+            return ret
+        changes.append(op)
+        if not status[s]:
+            comment.append('service was {}'.format(s))
+    changes = {zz['service_name']: {'new': '; '.join(changes)}} if changes else {}
+    return _ret_merge(
+        zz['service_name'],
+        ret,
+        {
+            'changes': changes,
+            'comment': '; '.join(comment),
+        },
+    )
+
+def _service_restart(zz, ret, force=False):
     if not ret['result']:
         return ret
     changes = []
@@ -942,7 +1005,7 @@ def _service_restart(zz, ret):
         changes.append('daemon-reload')
     for s, op in (('enabled', 'reenable'), ('active', 'restart')):
         _debug('{}={}', s, status[s])
-        if not updated and status[s]:
+        if not updated and status[s] and not (force and s == 'active'):
             continue
         _sh('systemctl {} {}'.format(op, zz['service_name']), ret)
         if not ret['result']:
@@ -952,9 +1015,9 @@ def _service_restart(zz, ret):
             comment.append('service was not {}'.format(s))
     if updated and not comment:
         comment.append('restarted')
-    changes = {zz['name']: {'new': '; '.join(changes)}} if changes else {}
+    changes = {zz['service_name']: {'new': '; '.join(changes)}} if changes else {}
     return _ret_merge(
-        zz['name'],
+        zz['service_name'],
         ret,
         {
             'changes': changes,
@@ -1020,6 +1083,7 @@ def _state_init(kwargs, caller=None):
     ret = _init_before_first_state()
     if ret and not ret['result']:
         return None, ret
+    _debug('name={}', kwargs.get('name', '<no name>'))
     _debug('low={}', __lowstate__)
     zz = copy.deepcopy(kwargs)
     _pillar(caller=caller or _caller(), zz=zz)
