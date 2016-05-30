@@ -24,6 +24,7 @@ import os.path
 import pwd
 import re
 import salt.utils
+import socket
 import subprocess
 import tempfile
 import time
@@ -34,6 +35,8 @@ radia = None
 _initialized = False
 
 _saved_returns = {}
+
+_IPV4_ADDR = re.compile(r'^((?:\d+\.)+)(\d+)$')
 
 # Very conservative unquoted shell command argument
 _SHELL_SAFE_ARG = re.compile(r'^[-_/:\.\+,a-zA-Z0-9]+$')
@@ -65,6 +68,11 @@ def cluster_start(**kwargs):
         return ret
     if not _cluster_start_args(zz, ret)['result']:
         return ret
+    res = _sh(
+        'docker inspect -f {{{{ .State.Running }}}} {master_container_name}'.format(**zz),
+        ret, ignore_errors=True)
+    if 'true' in res:
+        return _err(zz, ret, '{master_container_name}: master container is running, must stop first')
     _call_state(
         'plain_directory',
         {
@@ -491,10 +499,7 @@ def _cluster_config_host(zz, ret, host):
     def host_f(f):
         return os.path.join(zz['host_conf_d'], host, f)
 
-    tag='XYZZY'
-    res = _sh('docker --tlsverify --host="{}" inspect -f {} {}'.format(host, tag, zz['host_container_name']), ret, ignore_errors=True)
-    if tag in res:
-        return _ret_merge(zz, ret, {'result': False, 'comment': '{}: container {} exists, need to radia.cluster_stop'.format(host, zz['host_container_name'])})
+    _cluster_ip_and_subnet(zz, host)
     d = os.path.join(zz['host_conf_d'], host)
     _call_state(
         'plain_directory',
@@ -507,11 +512,12 @@ def _cluster_config_host(zz, ret, host):
     with _chdir(d):
         _sh('ssh-keygen -t ecdsa -N "" -f ssh_host_ecdsa_key', ret)
         zz['host_key'] = guest_f('ssh_host_ecdsa_key')
-        with open('ssh_host_ecdsa_key.pub') as f:
-            key = f.read()
+        key = _extract_pub_key('ssh_host_ecdsa_key.pub')
         with open('../known_hosts', 'a') as f:
-            f.write('{}:{} {}'.format(host, zz['ssh_port'], key))
+            f.write('[{}]:{},[{}]:{} {}\n'.format(
+                host, zz['ssh_port'], zz['ip'][host], zz['ssh_port'], key))
         zz.setdefault('_guest_cmd', {})[host] = guest_f('_sshd')
+        zz.setdefault('_host_log', {})[host] = _cluster_docker_log(zz, ret, host_f)
         _cluster_config_plain_file(
             zz, ret, host_f, ('sshd_config', '_sshd.sh'))
 
@@ -524,14 +530,20 @@ def _cluster_config_master(zz, ret):
     def host_f(f):
         return os.path.join(zz['host_conf_d'], f)
 
+    zz['ip'] = {}
+    zz['mpi_subnet'] = _cluster_ip_and_subnet(zz, zz['mpi_master_host'])
     _sh('ssh-keygen -t rsa -N "" -f id_rsa', ret)
     zz['identity_file'] = guest_f('id_rsa')
     zz['user_known_hosts_file'] = guest_f('known_hosts')
     zz['authorized_keys_file'] = guest_f('id_rsa.pub')
     zz['ssh_cmd'] = '/usr/bin/ssh -F {}'.format(guest_f('ssh_config'))
-    zz['hosts_f'] = guest_f('hosts')
+    zz['guest_hosts_f'] = guest_f('hosts')
     zz['cert_d'] = zz['host_conf_d']
-    _cluster_config_plain_file(zz, ret, host_f, ('run.sh', 'ssh.sh', 'ssh_config') )
+    zz['guest_user_sh'] = os.path.join(zz['guest_root_d'], zz['user_sh_basename'])
+    _cluster_config_plain_file(zz, ret, host_f, ('_run.sh', 'ssh.sh', 'ssh_config') )
+    zz['_master_log'] = _cluster_docker_log(
+        zz, ret, lambda x: os.path.join(zz['host_root_d'], x))
+    zz['_master_cmd'] = guest_f('_run')
     _call_state(
         'docker_tls_client',
         {
@@ -553,13 +565,42 @@ def _cluster_config_plain_file(zz, ret, host_f, basenames):
             'plain_file',
             {
                 'name': zz['name'] + '.' + b,
-                'file_name': host_f(b),
+                'file_name': host_f(b).replace('.sh', ''),
                 'source': os.path.join(zz['source_uri'], b),
                 'mode': 500 if b.endswith('.sh') else 400,
                 'zz': zz,
             },
             ret,
         )
+
+
+def _cluster_docker_log(zz, ret, host_f):
+    f = host_f('radia-mpi.log')
+    _call_state(
+        'plain_file',
+        {
+            'name': zz['name'] + '.' + f,
+            'file_name': f,
+            'contents': '',
+        },
+        ret,
+    )
+    return f
+
+
+def _cluster_ip_and_subnet(zz, host):
+    """POSIT: class C only"""
+    # gethostbyname returns 127.0.0.1 *always* on host it is executed
+    addr = subprocess.check_output(['dig', host, '+short']).rstrip('\n')
+    zz['ip'][host] = addr
+    res = _IPV4_ADDR.sub(r'\g<1>0/24', addr)
+    assert res != addr, \
+        '{} != {}: {} subnet replace failed: '.format(addr, res, host)
+    if 'mpi_subnet' in zz:
+        assert res == zz['mpi_subnet'], \
+            '{}: {} not on same subnet as master {} ({})'.format(
+                res, host, zz['mpi_master_host'], zz['mpi_subnet'])
+    return res
 
 
 def _cluster_start_args(zz, ret):
@@ -570,7 +611,8 @@ def _cluster_start_args(zz, ret):
         f = zz[r + '_fmt'].format(username=__pillar__['username'])
         zz[r] = f
         zz[x + '_conf_d'] = os.path.join(f, zz['conf_basename'])
-    zz['guest_output_d'] = os.path.join(zz['guest_root_d'], zz['output_basename'])
+    zz['guest_output_prefix'] = os.path.join(zz['guest_root_d'], zz['output_base'])
+    zz['debug_var'] = '1' if zz['debug'] else ''
     _cluster_start_args_assert(zz, ret)
     return ret
 
@@ -579,16 +621,11 @@ def _cluster_start_args_assert(zz, ret):
     if not os.path.exists(zz['host_root_d']):
         return _err(
             zz, ret,
-            '{}: host_root_d does not exist', zz['host_root_d'])
-    zz['user_sh'] = os.path.join(zz['host_root_d'], zz['user_sh_basename'])
-    if not os.path.exists(zz['user_sh']):
+            '{host_root_d}: host_root_d does not exist')
+    zz['host_user_sh'] = os.path.join(zz['host_root_d'], zz['user_sh_basename'])
+    if not os.path.exists(zz['host_user_sh']):
         return _err(
-            zz, ret,
-            '{}: start script does not exist', zz['user_sh'])
-    pat = os.path.join(zz['host_root_d'].format(username='*'), zz['conf_basename'])
-    found = glob.glob(pat)
-    if found:
-        return _err(zz, ret, '{}: directories exist, remove first', found)
+            zz, ret, '{host_user_sh}: start script does not exist')
     return
 
 
@@ -617,9 +654,13 @@ def _cluster_start_containers(zz, ret):
         )
         _sh(
             'docker run --tty --detach --log-driver=journald --net=host'
-            " --user {guest_user} -e RADIA_RUN_CMD='{_cmd}'"
+            " --user {guest_user} -e RADIA_RUN_CMD='{_cmd}' -e RADIA_DEBUG={debug_var}"
             ' -v {host_root_d}:{guest_root_d}'
             ' --name {_container} {image_name}'.format(**zz),
+            ret,
+            env=env,
+        )
+        _sh('nohup docker logs --follow {_container} >> {_log} 2>&1 &'.format(**zz),
             ret,
             env=env,
         )
@@ -630,8 +671,10 @@ def _cluster_start_containers(zz, ret):
     zz['_container'] = zz['host_container_name']
     for h in zz['hosts']:
         zz['_cmd'] = zz['_guest_cmd'][h]
+        zz['_log'] = zz['_host_log'][h]
         start(h)
-    zz['_cmd'] = os.path.join(zz['guest_conf_d'], 'run.sh')
+    zz['_cmd'] = zz['_master_cmd']
+    zz['_log'] = zz['_master_log']
     zz['_container'] = zz['master_container_name']
     start(zz['mpi_master_host'])
     return ret
@@ -823,6 +866,7 @@ def _docker_service_tls(zz, ret):
 
 
 def _err(zz, ret, fmt, *args, **kwargs):
+    kwargs.update(zz)
     return _ret_merge(
         zz,
         ret,
@@ -832,6 +876,12 @@ def _err(zz, ret, fmt, *args, **kwargs):
         },
     )
 
+
+def _extract_pub_key(filename):
+    with open(filename, 'r') as f:
+        key = f.read()
+    # Remove the name of the key (last word)
+    return ' '.join(key.split()[:2])
 
 def _host_user_uid(zz, ret):
     """Ensure host_user's uid is what we expect.
@@ -966,6 +1016,10 @@ def _ret_merge(name, ret, new):
     _debug('name={} new={}', name, new)
     for changes_type in 'changes', 'pchanges':
         if changes_type in new and new[changes_type]:
+            if not isinstance(new[changes_type], dict):
+                # plain_file: !!python/tuple [false, Source file salt://cluster/run.sh not found]
+                # cannot convert dictionary update sequence element #0 to a sequence
+                new[changes_type] = {'new': new[changes_type]}
             if _any(('old', 'new', 'diff'), new[changes_type]):
                 ret[changes_type][name] = new[changes_type]
             else:

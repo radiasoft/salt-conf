@@ -12,7 +12,7 @@ HostKey {{ zz.host_key }}
 HostbasedAuthentication no
 IgnoreRhosts yes
 # DEBUG3 or QUIET or INFO
-#LogLevel DEBUG
+LogLevel DEBUG
 PasswordAuthentication no
 PidFile sshd.pid
 Port {{ zz.ssh_port }}

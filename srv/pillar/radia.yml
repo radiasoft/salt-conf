@@ -28,10 +28,11 @@ radia:
     #image_name: ''
     master_container_name: radia-mpi
     #mpi_master_host: ''
-    output_basename: radia-mpi/out
+    output_base: radia-mpi-out
     source_uri: 'salt://cluster'
-    ssh_port: 8888
+    ssh_port: 2020
     user_sh_basename: radia-mpi.sh
+    debug: False
 
 #  cluster_runner:
 #    timer:
