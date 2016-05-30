@@ -18,16 +18,20 @@ radia:
 
   cluster_start:
     conf_basename: .radia-mpi
-    container_name: radia-mpi
     docker_tls_port: {{ zz.docker_tls_port }}
-    #guest_root_d: ''
+    #guest_root_d_fmt: ''
     guest_user: '{{ zz.user }}'
-    #host_root_d: ''
+    #host_root_d_fmt: ''
     host_user: '{{ zz.user }}'
-    #hosts: []
+    host_container_name: radia-mpi-host
+    #hosts: h1: ncores
     #image_name: ''
+    master_container_name: radia-mpi
+    #mpi_master_host: ''
+    output_basename: radia-mpi/out
     source_uri: 'salt://cluster'
     ssh_port: 8888
+    user_sh_basename: radia-mpi.sh
 
 #  cluster_runner:
 #    timer:

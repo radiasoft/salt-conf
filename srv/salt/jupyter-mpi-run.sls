@@ -1,2 +1,2 @@
-jupyterhub_cluster_start:
+jupyter_cluster_start:
   radia.cluster_start: []

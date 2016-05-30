@@ -16,6 +16,7 @@ import collections
 import contextlib
 import copy
 import datetime
+import glob
 import inspect
 import logging
 import os
@@ -67,27 +68,18 @@ def cluster_start(**kwargs):
     _call_state(
         'plain_directory',
         {
-            'name': zz['container_name'] + '.host_d',
-            'dir_name': zz['host_d'],
+            'name': zz['master_container_name'] + '.host_conf_d',
+            'dir_name': zz['host_conf_d'],
         },
         ret,
     )
-    with _chdir(zz['host_d']):
+    with _chdir(zz['host_conf_d']):
         _cluster_config_master(zz, ret)
         for host in zz['hosts']:
             _cluster_config_host(zz, ret, host)
-    _sh('chown -R {host_user}:{host_user} {host_d}'.format(**zz), ret)
-    _sh('chmod -R go= {host_d}'.format(**zz), ret)
+    _sh('chown -R {host_user}:{host_user} {host_conf_d}'.format(**zz), ret)
+    _sh('chmod -R go= {host_conf_d}'.format(**zz), ret)
     return _cluster_start_containers(zz, ret)
-
-
-def cluster_queue_check(**kwargs):
-    zz, ret = _state_init(kwargs)
-    if not ret['result']:
-        return ret
-    #TODO(robnagler) unfinished
-    #timer service that looks in cluster_start dirs for
-    #radia-run-mpi.sh
 
 
 def docker_container(**kwargs):
@@ -494,16 +486,16 @@ def _chdir(d):
 def _cluster_config_host(zz, ret, host):
 
     def guest_f(f):
-        return os.path.join(zz['guest_d'], host, f)
+        return os.path.join(zz['guest_conf_d'], host, f)
 
     def host_f(f):
-        return os.path.join(zz['host_d'], host, f)
+        return os.path.join(zz['host_conf_d'], host, f)
 
     tag='XYZZY'
-    res = _sh('docker --tlsverify --host="{}" inspect -f {} {}'.format(host, tag, zz['container_name']), ret, ignore_errors=True)
+    res = _sh('docker --tlsverify --host="{}" inspect -f {} {}'.format(host, tag, zz['host_container_name']), ret, ignore_errors=True)
     if tag in res:
-        return _ret_merge(zz, ret, {'result': False, 'comment': '{}: container {} exists, need to radia.cluster_stop'.format(host, zz['container_name'])})
-    d = os.path.join(zz['host_d'], host)
+        return _ret_merge(zz, ret, {'result': False, 'comment': '{}: container {} exists, need to radia.cluster_stop'.format(host, zz['host_container_name'])})
+    d = os.path.join(zz['host_conf_d'], host)
     _call_state(
         'plain_directory',
         {
@@ -527,10 +519,10 @@ def _cluster_config_host(zz, ret, host):
 def _cluster_config_master(zz, ret):
 
     def guest_f(f):
-        return os.path.join(zz['guest_d'], f)
+        return os.path.join(zz['guest_conf_d'], f)
 
     def host_f(f):
-        return os.path.join(zz['host_d'], f)
+        return os.path.join(zz['host_conf_d'], f)
 
     _sh('ssh-keygen -t rsa -N "" -f id_rsa', ret)
     zz['identity_file'] = guest_f('id_rsa')
@@ -538,7 +530,7 @@ def _cluster_config_master(zz, ret):
     zz['authorized_keys_file'] = guest_f('id_rsa.pub')
     zz['ssh_cmd'] = '/usr/bin/ssh -F {}'.format(guest_f('ssh_config'))
     zz['hosts_f'] = guest_f('hosts')
-    zz['cert_d'] = zz['host_d']
+    zz['cert_d'] = zz['host_conf_d']
     _cluster_config_plain_file(zz, ret, host_f, ('run.sh', 'ssh.sh', 'ssh_config') )
     _call_state(
         'docker_tls_client',
@@ -548,20 +540,22 @@ def _cluster_config_master(zz, ret):
         },
         ret,
     )
+    h = ''
+    for host, slots in zz['hosts'].items():
+        h += '{0} slots={1} max-slots={1}\n'.format(host, slots)
     with open('hosts', 'w') as f:
-        f.write('\n'.join(zz['hosts']) + '\n')
+        f.write(h)
 
 
 def _cluster_config_plain_file(zz, ret, host_f, basenames):
-    for sn in basenames:
-        fn = sn.replace('.sh', '')
+    for b in basenames:
         _call_state(
             'plain_file',
             {
-                'name': zz['name'] + '.' + fn,
-                'file_name': host_f(fn),
-                'source': os.path.join(zz['source_uri'], sn),
-                'mode': 400 if fn == sn else 500,
+                'name': zz['name'] + '.' + b,
+                'file_name': host_f(b),
+                'source': os.path.join(zz['source_uri'], b),
+                'mode': 500 if b.endswith('.sh') else 400,
                 'zz': zz,
             },
             ret,
@@ -569,27 +563,39 @@ def _cluster_config_plain_file(zz, ret, host_f, basenames):
 
 
 def _cluster_start_args(zz, ret):
-    _assert_args(zz, ['guest_user', 'host_user', 'hosts', 'host_root_d', 'guest_root_d', 'ssh_port', 'source_uri'])
-    # Needed because jupyterhub puts {username} in the notebook
-    for x in 'guest_root_d', 'host_root_d':
-        zz[x] = zz[x].format(username=jupyterhub_user)
+    _assert_args(zz, ['guest_user', 'host_user', 'hosts', 'host_root_d_fmt', 'guest_root_d_fmt', 'ssh_port', 'source_uri'])
+    for x in 'guest', 'host':
+        r = x + '_root_d'
+        # Needed because jupyterhub puts {username} in the notebook
+        f = zz[r + '_fmt'].format(username=__pillar__['username'])
+        zz[r] = f
+        zz[x + '_conf_d'] = os.path.join(f, zz['conf_basename'])
+    zz['guest_output_d'] = os.path.join(zz['guest_root_d'], zz['output_basename'])
+    _cluster_start_args_assert(zz, ret)
+    return ret
+
+
+def _cluster_start_args_assert(zz, ret):
     if not os.path.exists(zz['host_root_d']):
         return _err(
             zz, ret,
-            '{}: host_root_d does not exist, start container', zz['host_root_d'])
-    zz['guest_d'] = os.path.join(zz['guest_root_d'], zz['conf_basename'])
-    zz['host_d'] = os.path.join(zz['host_root_d'], zz['conf_basename'])
-    if os.path.exists(zz['host_d']):
-        return _err(zz, ret, '{}: directory exists, remove first', zz['host_d'])
-    return ret
+            '{}: host_root_d does not exist', zz['host_root_d'])
+    zz['user_sh'] = os.path.join(zz['host_root_d'], zz['user_sh_basename'])
+    if not os.path.exists(zz['user_sh']):
+        return _err(
+            zz, ret,
+            '{}: start script does not exist', zz['user_sh'])
+    pat = os.path.join(zz['host_root_d'].format(username='*'), zz['conf_basename'])
+    found = glob.glob(pat)
+    if found:
+        return _err(zz, ret, '{}: directories exist, remove first', found)
+    return
 
 
 def _cluster_start_containers(zz, ret):
     env = os.environ.copy()
-    env['DOCKER_TLS_VERIFY'] = '1'
-    env['DOCKER_CERT_PATH'] = zz['cert_d']
-    zz['image_name'] = _docker_image_name(zz['image_name'])
-    for host in zz['hosts']:
+
+    def start(host):
         env['DOCKER_HOST'] = 'tcp://{}:{}'.format(host, zz['docker_tls_port'])
         _call_state(
             'docker_image',
@@ -601,15 +607,33 @@ def _cluster_start_containers(zz, ret):
             },
             ret,
         )
-        zz['_cmd'] = zz['_guest_cmd'][host]
+        # We already know the directories don't exist so containers
+        # can't run anyway.
+        _sh(
+            'docker rm --force {_container}'.format(**zz),
+            ret,
+            ignore_errors=True,
+            env=env,
+        )
         _sh(
             'docker run --tty --detach --log-driver=journald --net=host'
-            ' --user {guest_user} -e RADIA_RUN_CMD={_cmd}'
+            " --user {guest_user} -e RADIA_RUN_CMD='{_cmd}'"
             ' -v {host_root_d}:{guest_root_d}'
-            ' --name {container_name} {image_name}'.format(**zz),
+            ' --name {_container} {image_name}'.format(**zz),
             ret,
             env=env,
         )
+
+    env['DOCKER_TLS_VERIFY'] = '1'
+    env['DOCKER_CERT_PATH'] = zz['cert_d']
+    zz['image_name'] = _docker_image_name(zz['image_name'])
+    zz['_container'] = zz['host_container_name']
+    for h in zz['hosts']:
+        zz['_cmd'] = zz['_guest_cmd'][h]
+        start(h)
+    zz['_cmd'] = os.path.join(zz['guest_conf_d'], 'run.sh')
+    zz['_container'] = zz['master_container_name']
+    start(zz['mpi_master_host'])
     return ret
 
 

@@ -24,8 +24,8 @@ radia:
         - jupyter
 
   cluster_start:
-    host_root_d: '{{ zz.host_notebook_d }}'
-    guest_root_d: '{{ zz.guest_notebook_d }}'
+    host_root_d_fmt: '{{ zz.host_notebook_d }}'
+    guest_root_d_fmt: '{{ zz.guest_notebook_d }}'
     image_name: '{{ stack.jupyter.image_name }}'
 
 jupyterhub:

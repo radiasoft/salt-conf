@@ -135,13 +135,12 @@ postgresql_jupyterhub:
   admin_pass: 2euhoxplPzleKWLZ
 EOF
 
-_create srv/pillar/secrets/cluster-dev.yml force <<EOF
+_create srv/pillar/secrets/jupyter-mpi-master-dev.yml force <<EOF
 radia:
   cluster_start:
-    username: vagrant
-    host_root_d:
-    hosts: [ $mpi_minion_id ]
-
+    mpi_master_host: "$jupyterhub_minion_id"
+    hosts:
+      "$mpi_minion_id": 1
 EOF
 
 
