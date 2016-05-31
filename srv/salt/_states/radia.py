@@ -656,6 +656,7 @@ def _cluster_start_containers(zz, ret):
             ignore_errors=True,
             env=env,
         )
+        time.sleep(zz['nfs_sync_sleep_after_conf'])
         _sh(
             'docker run --tty --detach --log-driver=journald --net=host'
             " --user {guest_user} -e RADIA_RUN_CMD='{_cmd}' -e RADIA_DEBUG={debug_var}"
