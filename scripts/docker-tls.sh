@@ -49,6 +49,10 @@ EOF
 
 for host in "$@"; do
     ip=$(dig "$host" +short)
+    if [[ -z $ip ]]; then
+        echo "dig $host +short: failed; invalid host name" 1>&2
+        exit 1
+    fi
     if [[ $ip == $host ]]; then
         # Should only be used for testing
         host=server
