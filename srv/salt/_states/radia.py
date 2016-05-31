@@ -626,6 +626,10 @@ def _cluster_start_args_assert(zz, ret):
     if not os.path.exists(zz['host_user_sh']):
         return _err(
             zz, ret, '{host_user_sh}: start script does not exist')
+    pat = os.path.join(zz['host_root_d'].format(username='*'), zz['conf_basename'])
+    found = glob.glob(pat)
+    if found:
+        return _err(zz, ret, '{}: directories exist, remove first', found)
     return
 
 
