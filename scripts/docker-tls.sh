@@ -1,6 +1,18 @@
 #!/bin/bash
 #
-# Initialize Certificate Authority
+# Initialize Certificate Authority (CA)
+#
+# Docker relies on certificates signed by CA to authenticate the client.
+# Any valid certificate signed by the CA (--tlscacert) is considered valid
+# for client authentication. Therefore, you have to have a unique CA
+# per "swarm" or cluster in our case.
+#
+# Ultimately, we should create CA every time a cluster is defined. For
+# now, we have one cluster, and we are basically testing and everything
+# is internal. Therefore, we don't recreate the certificates.
+#
+# The problem is that you have to restart the docker daemons when
+# you change the CA.
 #
 set -e
 if (( $# == 0 )); then
