@@ -25,4 +25,4 @@ fi
 set -e
 salt=( salt -c $PWD/run/etc/salt -l info )
 "${salt[@]}" "$master" state.apply
-"${salt[@]}" "$master" state.apply jupyter-mpi-stop pillar="{'username': '$username', 'force': $force}"
+"${salt[@]}" "$master" state.apply jupyter-mpi-stop pillar="{username: '$username', force: $force}"

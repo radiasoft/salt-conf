@@ -34,8 +34,7 @@ radia:
     ssh_port: 2020
     user_sh_basename: radia-mpi.sh
 
-  cluster_stop:
-    force: false
+  cluster_stop: {}
 
 #  cluster_runner:
 #    timer:
