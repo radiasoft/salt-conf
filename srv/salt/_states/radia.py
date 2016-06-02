@@ -105,7 +105,7 @@ def cluster_stop(**kwargs):
         "docker inspect -f '{{ .State.Running }}' " +  zz['master_container_name'],
         ret, ignore_errors=True, env=env)
     # TODO(robnagler) verify result is one of expected: true or false or error in no such image else abort
-    if 'true' in res and 'force' in __pillar__ and  __pillar__['force']:
+    if 'true' in res and not ('force' in __pillar__ and  __pillar__['force']):
         return _err(zz, ret, '{master_container_name}: master container is running, must stop first, or pass "pillar={{force: true}}"')
     container = zz['master_container_name']
     for host in [zz['mpi_master_host']] + zz['hosts'].keys():
