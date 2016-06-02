@@ -899,6 +899,7 @@ def _docker_tls_env(zz, host):
     env['DOCKER_TLS_VERIFY'] = '1'
     env['DOCKER_CERT_PATH'] = zz['cert_d']
     env['DOCKER_HOST'] = 'tcp://{}:{}'.format(host, zz['tls_port'])
+    return env
 
 
 def _err(zz, ret, fmt, *args, **kwargs):
