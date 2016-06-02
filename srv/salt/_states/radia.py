@@ -109,8 +109,9 @@ def cluster_stop(**kwargs):
         return _err(zz, ret, '{master_container_name}: master container is running, must stop first, or pass "force"')
     container = zz['master_container_name']
     for host in [zz['mpi_master_host']] + zz['hosts'].keys():
+        _debug('host={}', host)
         env = _docker_tls_env(zz, host)
-        _sh('docker rm -f {}'.format(container), ret, ignore_errors=True, env=env)
+        _sh('env; docker rm -f {}'.format(container), ret, ignore_errors=True, env=env)
         res = _sh(
             "docker inspect -f '{{ .State.Running }}' " + container + ' 2>&1',
             ret, ignore_errors=True, env=env)
