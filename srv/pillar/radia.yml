@@ -7,7 +7,6 @@
     dir_mode='700',
     docker_group='docker',
     docker_sock='/run/docker.sock',
-    docker_tls_port='2376',
 ) %}
 
 radia:
@@ -17,9 +16,9 @@ radia:
       include: True
 
   cluster_start:
+    #cert_d: ''
     conf_basename: .radia-mpi
-    nfs_sync_sleep_after_conf: 2
-    docker_tls_port: {{ zz.docker_tls_port }}
+    debug: False
     #guest_root_d_fmt: ''
     guest_user: '{{ zz.user }}'
     #host_root_d_fmt: ''
@@ -29,11 +28,14 @@ radia:
     #image_name: ''
     master_container_name: radia-mpi
     #mpi_master_host: ''
+    nfs_sync_sleep_after_conf: 2
     output_base: radia-mpi-out
     source_uri: 'salt://cluster'
     ssh_port: 2020
     user_sh_basename: radia-mpi.sh
-    debug: False
+
+  cluster_stop:
+    force: false
 
 #  cluster_runner:
 #    timer:
@@ -70,7 +72,7 @@ radia:
   docker_image: {}
 
   docker_service:
-    disable_firewall: true
+    disable_firewall: false
     manage_iptables: true
     required_pkgs:
       - docker
@@ -82,17 +84,16 @@ radia:
       # Managed by @radiasoft/salt-conf
       OPTIONS='--selinux-enabled --log-driver=journald --iptables={{ zz.manage_iptables|lower }} {{ zz.tls_options }}'
 {% endraw %}
-    #tlscacert: ''
-    #tlscert: ''
-    #tlskey: ''
-    #tls_options: ''
-    tls_port: {{ zz.docker_tls_port }}
+    want_tls: false
 
   docker_tls_client:
-    #cert_d: ''
+    cert_d: /root/.radia-cluster
+    group: root
     #tlscacert: ''
     #tlscert: ''
     #tlskey: ''
+    tls_port: 2376
+    user: root
 
   docker_sock_semodule:
     # policy names seem to be alphanum only

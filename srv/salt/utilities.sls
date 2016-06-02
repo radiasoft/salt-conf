@@ -17,3 +17,6 @@ screenrc_config:
 
 timesync_service:
   radia.timesync_service: []
+
+docker_service:
+  radia.docker_service: []

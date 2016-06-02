@@ -68,9 +68,12 @@ def cluster_start(**kwargs):
         return ret
     if not _cluster_start_args(zz, ret)['result']:
         return ret
+    _cluster_start_args_assert(zz, ret)
+    if not ret['result']:
+        return ret
     res = _sh(
-        'docker inspect -f {{{{ .State.Running }}}} {master_container_name}'.format(**zz),
-        ret, ignore_errors=True)
+        "docker inspect -f '{{ .State.Running }}' " + zz['master_container_name'],
+        ret, ignore_errors=True, env=_docker_tls_env(zz, zz['mpi_master_host']))
     if 'true' in res:
         return _err(zz, ret, '{master_container_name}: master container is running, must stop first')
     _call_state(
@@ -88,6 +91,36 @@ def cluster_start(**kwargs):
     _sh('chown -R {host_user}:{host_user} {host_conf_d}'.format(**zz), ret)
     _sh('chmod -R go= {host_conf_d}'.format(**zz), ret)
     return _cluster_start_containers(zz, ret)
+
+
+def cluster_stop(**kwargs):
+    zz, ret = _state_init(kwargs)
+    if not ret['result']:
+        return ret
+    _pillar(zz, 'cluster_start')
+    if not _cluster_start_args(zz, ret)['result']:
+        return ret
+    env = _docker_tls_env(zz, zz['mpi_master_host'])
+    res = _sh(
+        "docker inspect -f '{{ .State.Running }}' " +  zz['master_container_name'],
+        ret, ignore_errors=True, env=env)
+    # TODO(robnagler) verify result is one of expected: true or false or error in no such image else abort
+    if 'true' in res and not zz['force']:
+        return _err(zz, ret, '{master_container_name}: master container is running, must stop first, or pass "force"')
+    container = zz['master_container_name']
+    for host in [zz['mpi_master_host']] + zz['hosts'].keys():
+        env = _docker_tls_env(zz, host)
+        _sh('docker rm -f {}'.format(container), ret, ignore_errors=True, env=env)
+        res = _sh(
+            "docker inspect -f '{{ .State.Running }}' " + container + ' 2>&1',
+            ret, ignore_errors=True, env=env)
+        if not re.search('error|false', res, flags=re.IGNORECASE):
+            return _err(zz, ret, '{}: {} container did not stop; State.Running={}', host, container, res)
+        container = zz['host_container_name']
+    _sh('rm -rf {host_conf_d}'.format(**zz), ret, ignore_errors=True)
+    if os.path.exists(zz['host_conf_d']):
+        return _err(zz, ret, '{host_conf_d}: unable to remove')
+    return ret
 
 
 def docker_container(**kwargs):
@@ -128,7 +161,6 @@ def docker_image(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
-    _call_state('docker_service', {}, ret)
     if not ret['result']:
         return ret
     i = _docker_image_name(zz['image_name'])
@@ -231,6 +263,8 @@ def docker_tls_client(**kwargs):
         {
             'name': 'docker_tls_client.cert_d',
             'dir_name': zz['cert_d'],
+            'group': zz['group'],
+            'user': zz['user'],
         },
         ret,
     )
@@ -244,6 +278,8 @@ def docker_tls_client(**kwargs):
                 'name': 'docker_tls_client.' + k,
                 'file_name': f,
                 'contents': zz[k],
+                'group': zz['group'],
+                'user': zz['user'],
             },
             ret,
         )
@@ -510,7 +546,7 @@ def _cluster_config_host(zz, ret, host):
         ret,
     )
     with _chdir(d):
-        _sh('ssh-keygen -t ecdsa -N "" -f ssh_host_ecdsa_key', ret)
+        r = _sh('ssh-keygen -t ecdsa -N "" -f ssh_host_ecdsa_key', ret)
         zz['host_key'] = guest_f('ssh_host_ecdsa_key')
         key = _extract_pub_key('ssh_host_ecdsa_key.pub')
         with open('../known_hosts', 'a') as f:
@@ -538,20 +574,11 @@ def _cluster_config_master(zz, ret):
     zz['authorized_keys_file'] = guest_f('id_rsa.pub')
     zz['ssh_cmd'] = '/usr/bin/ssh -F {}'.format(guest_f('ssh_config'))
     zz['guest_hosts_f'] = guest_f('hosts')
-    zz['cert_d'] = zz['host_conf_d']
     zz['guest_user_sh'] = os.path.join(zz['guest_root_d'], zz['user_sh_basename'])
     _cluster_config_plain_file(zz, ret, host_f, ('_run.sh', 'ssh.sh', 'ssh_config') )
     zz['_master_log'] = _cluster_docker_log(
         zz, ret, lambda x: os.path.join(zz['host_root_d'], x))
     zz['_master_cmd'] = guest_f('_run')
-    _call_state(
-        'docker_tls_client',
-        {
-            'name': zz['name'] + '.' + 'docker_tls_client',
-            'cert_d': zz['cert_d'],
-        },
-        ret,
-    )
     h = ''
     for host, slots in zz['hosts'].items():
         h += '{0} slots={1} max-slots={1}\n'.format(host, slots)
@@ -576,15 +603,10 @@ def _cluster_config_plain_file(zz, ret, host_f, basenames):
 
 def _cluster_docker_log(zz, ret, host_f):
     f = host_f('radia-mpi.log')
-    _call_state(
-        'plain_file',
-        {
-            'name': zz['name'] + '.' + f,
-            'file_name': f,
-            'contents': '',
-        },
-        ret,
-    )
+    # Prevents confusing output, because plain_file would
+    # output a difference from the previous run. It's not
+    # like we are tracking all creates here.
+    _sh('dd if=/dev/null of={}'.format(f), ret)
     return f
 
 
@@ -604,6 +626,7 @@ def _cluster_ip_and_subnet(zz, host):
 
 
 def _cluster_start_args(zz, ret):
+    _pillar(zz, 'docker_tls_client')
     _assert_args(zz, ['guest_user', 'host_user', 'hosts', 'host_root_d_fmt', 'guest_root_d_fmt', 'ssh_port', 'source_uri'])
     for x in 'guest', 'host':
         r = x + '_root_d'
@@ -613,7 +636,9 @@ def _cluster_start_args(zz, ret):
         zz[x + '_conf_d'] = os.path.join(f, zz['conf_basename'])
     zz['guest_output_prefix'] = os.path.join(zz['guest_root_d'], zz['output_base'])
     zz['debug_var'] = '1' if zz['debug'] else ''
-    _cluster_start_args_assert(zz, ret)
+    tls_args = zz.copy()
+    tls_args['name'] += '.' + 'docker_tls_client'
+    _call_state('docker_tls_client', tls_args, ret)
     return ret
 
 
@@ -634,10 +659,9 @@ def _cluster_start_args_assert(zz, ret):
 
 
 def _cluster_start_containers(zz, ret):
-    env = os.environ.copy()
 
     def start(host):
-        env['DOCKER_HOST'] = 'tcp://{}:{}'.format(host, zz['docker_tls_port'])
+        env = _docker_tls_env(zz, host)
         _call_state(
             'docker_image',
             {
@@ -670,8 +694,6 @@ def _cluster_start_containers(zz, ret):
             env=env,
         )
 
-    env['DOCKER_TLS_VERIFY'] = '1'
-    env['DOCKER_CERT_PATH'] = zz['cert_d']
     zz['image_name'] = _docker_image_name(zz['image_name'])
     zz['_container'] = zz['host_container_name']
     for h in zz['hosts']:
@@ -846,9 +868,11 @@ def _docker_image_name(image):
 
 
 def _docker_service_tls(zz, ret):
-    if not (ret['result'] and _DOCKER_TLS_FLAGS[0] in zz):
+    if not (ret['result'] and zz['want_tls']):
         zz['tls_options'] = ''
         return ret
+    # Won't override docker_service_tls or kwargs so docker
+    _pillar(zz, 'docker_tls_client')
     opts = '--host=tcp://0.0.0.0:{} --host=unix://{} --tlsverify'.format(
         zz['tls_port'], zz['sock'])
     _assert_args(zz, _DOCKER_TLS_FLAGS)
@@ -860,14 +884,20 @@ def _docker_service_tls(zz, ret):
                 'name': 'docker_service_tls.' + f,
                 'file_name': f,
                 'contents': zz[k],
-                'user': 'root',
-                'group': 'root',
+                'user': zz['user'],
+                'group': zz['group'],
             },
             ret,
         )
         opts += ' --{} {}'.format(k, f)
     zz['tls_options'] = opts
     return ret
+
+def _docker_tls_env(zz, host):
+    env = os.environ.copy()
+    env['DOCKER_TLS_VERIFY'] = '1'
+    env['DOCKER_CERT_PATH'] = zz['cert_d']
+    env['DOCKER_HOST'] = 'tcp://{}:{}'.format(host, zz['tls_port'])
 
 
 def _err(zz, ret, fmt, *args, **kwargs):
@@ -887,6 +917,7 @@ def _extract_pub_key(filename):
         key = f.read()
     # Remove the name of the key (last word)
     return ' '.join(key.split()[:2])
+
 
 def _host_user_uid(zz, ret):
     """Ensure host_user's uid is what we expect.
@@ -980,7 +1011,7 @@ def _nfs_mount_selinux(zz, ret):
     )
 
 
-def _pillar(key=None, caller=None, zz=None):
+def _pillar(zz=None, caller=None, key=None):
     full_key = ['radia', caller or _caller()]
     if key:
          full_key += key.split('.')
@@ -1123,8 +1154,8 @@ def _sh(cmd, ret, ignore_errors=False, env=None):
     if not ret['result']:
         return ''
     name = 'shell.' + cmd
-    stdout = None
-    stderr = None
+    stdout = ''
+    stderr = ''
     err = None
     try:
         _debug('cmd={}', cmd)
@@ -1146,6 +1177,9 @@ def _sh(cmd, ret, ignore_errors=False, env=None):
             err = 'exit={}'.format(p.returncode)
     except Exception as e:
         err = str(e)
+        if hasattr(e, 'output'):
+            stdout += e.output
+            _debug('stdout={}', stdout)
     _debug('err={}', err)
     if not ignore_errors and err:
         _ret_merge(
@@ -1159,7 +1193,7 @@ def _sh(cmd, ret, ignore_errors=False, env=None):
         )
         return ''
     _inv({'name': name, 'stdout': stdout, 'stderr': stderr})
-    return '' if err else stdout
+    return '' if err and not ignore_errors else stdout
 
 
 def _state_init(kwargs, caller=None):
@@ -1169,7 +1203,7 @@ def _state_init(kwargs, caller=None):
     _debug('name={}', kwargs.get('name', '<no name>'))
     _debug('low={}', __lowstate__)
     zz = copy.deepcopy(kwargs)
-    _pillar(caller=caller or _caller(), zz=zz)
+    _pillar(zz, caller or _caller())
     _assert_name(zz)
     ret = _ret_init(zz)
     return zz, _ret_init(zz)
