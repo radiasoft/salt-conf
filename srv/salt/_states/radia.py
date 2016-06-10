@@ -162,8 +162,6 @@ def docker_image(**kwargs):
     zz, ret = _state_init(kwargs)
     if not ret['result']:
         return ret
-    if not ret['result']:
-        return ret
     i = _docker_image_name(zz['image_name'])
     exists, ret = _docker_image_exists(i, ret)
     if not ret['result']:
