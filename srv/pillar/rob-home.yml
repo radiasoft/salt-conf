@@ -13,6 +13,7 @@ rob_home:
       include: True
       require:
         - utilities
+        - rob-home
 
   sonos:
     guest_conf_d: "{{ zz.guest_conf_d }}"
