@@ -738,6 +738,8 @@ def _docker_container_args(kwargs):
     if zz.get('want_docker_sock', False):
         f = zz['sock']
         start += ' -v {}:{}'.format(f, f)
+    if zz.get('want_net_host', False):
+        start += ' --net=host'
     start += ' ' + _docker_image_name(zz['image_name'])
     #TODO: allow array or use sh -c
     cmd = zz.get('cmd', None)

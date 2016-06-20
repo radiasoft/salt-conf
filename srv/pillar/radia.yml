@@ -47,6 +47,7 @@ radia:
     guest_user: "{{ zz.user }}"
     sock: "{{ zz.docker_sock }}"
     program: /usr/bin/docker
+    want_net_host: False
     stop_time: 2
     makedirs: True
     systemd_filename: '/etc/systemd/system/{service_name}.service'

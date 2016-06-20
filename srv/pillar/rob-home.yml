@@ -1,0 +1,26 @@
+#
+# Default configuration for salt/jupyterhub.sls
+#
+# Use scripts/jupyterhub_secret.py to generate passwords and (fake) OAuth keys
+#
+{% set zz = dict(
+    guest_conf_d='/srv/node-sonos-http-api',
+    host_conf_d='/var/lib/sonos',
+) %}
+rob_home:
+  state_trees:
+    rub-home:
+      include: True
+      require:
+        - utilities
+
+  sonos:
+    guest_conf_d: "{{ zz.guest_conf_d }}"
+    guest_presets_json: "{{ zz.host_conf_d }}/presets.json"
+    guest_settings_json: "{{ zz.host_conf_d }}/settings.json"
+    host_conf_d: "{{ zz.host_conf_d }}"
+    host_presets_json: "{{ zz.host_conf_d }}/presets.json"
+    host_settings_json: "{{ zz.host_conf_d }}/settings.json"
+    # password:
+    port: 5005
+    # username:

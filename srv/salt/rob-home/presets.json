@@ -1,0 +1,132 @@
+{
+    "adele": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Adele",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "amos lee": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Amos Lee",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "creedence": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "CCR",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "dixie chicks": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Dixie Chicks",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "earth wind fire": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Earth Wind Fire",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "jock jams": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Jock Jams",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "led zeppelin": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Led Zeppelin",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "little feat": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Little Feat",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "michael jackson": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Michael Jackson",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "motion worker": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Motion Worker",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "nelly furtado": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Nelly Furtado",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "southern rock": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "Southern Rock",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    },
+    "stones": {
+      "players": [
+        { "roomName": "Living Room", "volume": 15}
+      ],
+      "state": "PLAYING",
+      "favorite": "The Rolling Stones",
+      "uri": "x-rincon-stream:RINCON_0000000000001500",
+      "playMode": "SHUFFLE",
+      "pauseOthers": false
+    }
+}
