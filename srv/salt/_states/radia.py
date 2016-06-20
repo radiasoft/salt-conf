@@ -606,6 +606,7 @@ def _cluster_docker_log(zz, ret, host_f):
     # output a difference from the previous run. It's not
     # like we are tracking all creates here.
     _sh('dd if=/dev/null of={}'.format(f), ret)
+    _sh('chown -R {host_user}:{host_user} {f}'.format(**zz), ret)
     return f
 
 
