@@ -14,6 +14,7 @@ robhome_sonos_container:
     - cmd: "{{ pillar.robhome.sonos.guest_conf_d }}/start"
     - image_name: robnagler/sonos
     - want_net_host: True
+    - makedirs: False
     - volumes:
       - [ "{{ pillar.robhome.sonos.host_settings_json }}",  "{{ pillar.robhome.sonos.guest_settings_json }}" ]
       - [ "{{ pillar.robhome.sonos.host_presets_json }}",  "{{ pillar.robhome.sonos.guest_presets_json }}" ]
