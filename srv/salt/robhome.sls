@@ -12,6 +12,9 @@ robhome_sonos_presets_json:
 # all the configuration for the firewall to be here. It's not
 # incremental like other configuration.
 robhome_sonos_firewall_xml:
+  service.running:
+    - name: firewalld.service
+    - enabled: True
   radia.plain_file:
     - file_name: /etc/firewalld/services/sonos.xml
     - source: salt://robhome/sonos.xml
