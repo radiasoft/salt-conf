@@ -14,6 +14,11 @@ robhom_sonos_firewall:
     - ports:
         - {{ pillar.robhome.sonos.port }}/tcp
         - {{ pillar.robhome.sonos.callback_port }}/tcp
+        # Need this so they aren't deleted
+        - dhcpv6-client
+        - mdns
+        - ssh
+
 
 robhome_sonos_container:
   radia.docker_container:
