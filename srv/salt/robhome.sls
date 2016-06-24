@@ -27,7 +27,7 @@ robhome_sonos_firewall:
     - onchanges:
       - radia: robhome_sonos_firewall_xml
   cmd.run:
-    - name: firewall-cmd --add-service=sonos --permanent
+    - name: firewall-cmd --zone=public --add-service=sonos --permanent
 
 robhome_sonos_container:
   radia.docker_container:
