@@ -8,17 +8,19 @@ robhome_sonos_presets_json:
     - file_name: "{{ pillar.robhome.sonos.host_presets_json }}"
     - source: salt://robhome/presets.json
 
-robhom_sonos_firewall:
-  firewalld.present:
-    - name: public
-    - ports:
-        - {{ pillar.robhome.sonos.port }}/tcp
-        - {{ pillar.robhome.sonos.callback_port }}/tcp
-        # Need this so they aren't deleted
-        - dhcpv6-client
-        - mdns
-        - ssh
-
+robhome_sonos_firewall:
+  radia.plain_file:
+    - file_name: /etc/firewalld/services/sonos.xml
+    - source: salt://robhome/sonos.xml
+    - user: root
+    - group: root
+  cmd.run:
+    - name: firewall-cmd --add-service=sonos --permanent
+  service.running:
+    - name: firewalld.service
+    - enable: True
+    - watch:
+      - file: /etc/firewalld/services/sonos.xml
 
 robhome_sonos_container:
   radia.docker_container:
