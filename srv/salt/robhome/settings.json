@@ -1,7 +1,7 @@
 {
-    "port": zz.robhome.sonos.port,
+    "port": {{ zz.robhome.sonos.port }},
     "auth": {
-        "username": "{zz.robhome.sonos.username}",
-        "password": "{zz.robhome.sonos.password}"
+        "username": "{{ zz.robhome.sonos.username }}",
+        "password": "{{ zz.robhome.sonos.password }}"
     }
 }
