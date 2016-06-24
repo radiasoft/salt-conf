@@ -14,13 +14,14 @@ robhome_sonos_firewall:
     - source: salt://robhome/sonos.xml
     - user: root
     - group: root
-  cmd.run:
-    - name: firewall-cmd --add-service=sonos --permanent
+  # Must come next, because the firewalld needs to be restarted if file changes
   service.running:
     - name: firewalld.service
     - enable: True
     - watch:
       - file: /etc/firewalld/services/sonos.xml
+  cmd.run:
+    - name: firewall-cmd --add-service=sonos --permanent
 
 robhome_sonos_container:
   radia.docker_container:
