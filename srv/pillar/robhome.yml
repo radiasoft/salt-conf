@@ -9,8 +9,8 @@ state_trees:
 robhome:
   sonos:
     guest_conf_d: "{{ zz.guest_conf_d }}"
-    guest_presets_json: "{{ zz.host_conf_d }}/presets.json"
-    guest_settings_json: "{{ zz.host_conf_d }}/settings.json"
+    guest_presets_json: "{{ zz.guest_conf_d }}/presets.json"
+    guest_settings_json: "{{ zz.guest_conf_d }}/settings.json"
     host_conf_d: "{{ zz.host_conf_d }}"
     host_presets_json: "{{ zz.host_conf_d }}/presets.json"
     host_settings_json: "{{ zz.host_conf_d }}/settings.json"
