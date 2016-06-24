@@ -3,10 +3,10 @@
     host_conf_d='/var/lib/sonos',
 ) %}
 state_trees:
-  rob_home:
+  robhome:
     - utilities
 
-rob_home:
+robhome:
   sonos:
     guest_conf_d: "{{ zz.guest_conf_d }}"
     guest_presets_json: "{{ zz.host_conf_d }}/presets.json"
