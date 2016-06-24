@@ -9,12 +9,10 @@
     docker_sock='/run/docker.sock',
 ) %}
 
-radia:
-  state_trees:
-    utilities:
-      require: []
-      include: True
+state_trees:
+  utilities: []
 
+radia:
   cluster_start:
     #cert_d: ''
     conf_basename: .radia-mpi

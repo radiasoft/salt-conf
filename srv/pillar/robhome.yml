@@ -1,17 +1,12 @@
-#
-# Default configuration for salt/jupyterhub.sls
-#
-# Use scripts/jupyterhub_secret.py to generate passwords and (fake) OAuth keys
-#
 {% set zz = dict(
     guest_conf_d='/srv/node-sonos-http-api',
     host_conf_d='/var/lib/sonos',
 ) %}
 state_trees:
-  robhome:
+  rob_home:
     - utilities
 
-robhome:
+rob_home:
   sonos:
     guest_conf_d: "{{ zz.guest_conf_d }}"
     guest_presets_json: "{{ zz.host_conf_d }}/presets.json"

@@ -62,12 +62,8 @@ secret configuration so we provide host in `secret-slug` files.
 Every subsystem contains a pillar of the form:
 
 ```yaml
-radia:
-  state_trees:
-    jupyterhub:
-      include: True
-      require:
-        - utilities
+state_trees:
+  jupyterhub: [ utilities ]
 ```
 
 This is a state tree selector. Normally, states are configured in
@@ -132,7 +128,7 @@ mkdir -p ~/src/radiasoft
 cd ~/src/radiasoft
 git clone https://github.com/radiasoft/salt-conf
 cd salt-conf
-bash scripts/salt-master.sh
+bash scripts/master.sh
 ```
 
 This will do a lot of things, mostly creating files in the `run`

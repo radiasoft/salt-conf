@@ -1,9 +1,6 @@
-radia:
-  state_trees:
-    jupyter:
-      include: True
-      require:
-        - utilities
+state_trees:
+  jupyter:
+    - utilities
 
 jupyter:
   debug: true

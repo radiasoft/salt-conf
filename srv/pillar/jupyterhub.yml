@@ -15,14 +15,12 @@
     postgresql_host_home_d='/var/lib/' + zz.postgresql_name,
 ) %}
 
-radia:
-  state_trees:
-    jupyterhub:
-      include: True
-      require:
-        - utilities
-        - jupyter
+state_trees:
+  jupyterhub:
+    - utilities
+    - jupyter
 
+radia:
   cluster_start:
     host_root_d_fmt: '{{ zz.host_notebook_d }}'
     guest_root_d_fmt: '{{ zz.guest_notebook_d }}'

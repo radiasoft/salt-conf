@@ -6,27 +6,24 @@
 # to drive the state tree files to be run.
 #
 def run():
-    """Include radia:state_trees in the order they need to run.
+    """Sort pillar ``state_trees`` topologically and return as top trees.
 
-    state_trees are "state files" with dependencies specified
-    in pillars as follows::
+    state_trees are the state "state files" to be executed
+    as defined by the pillar files. Since pillar.stack merges
+    hashes, we end up with something like::
 
-        radia:
-          state_trees:
-            utilities:
-               include: True
-               require: []
-            jupyterhub:
-               include: True
-               require: [ utilities ]
+        state_trees:
+          utilities: []
+          jupyterhub: [ utilities ]
 
-    jupyterhub depends on utilities. If include is False, they
-    won't be included in the list of state trees to run.
+    jupyterhub depends on utilities so we know the order
+    to execute the state files in so we don't need to double
+    specify in the salt and pillar files. salt trees are
+    independent and invoked by the pillar.stack for the minion.
     """
     todo = {}
-    for k, v in __pillar__['radia']['state_trees'].iteritems():
-        if v and v['include']:
-            todo[k] = v['require']
+    for k, v in __pillar__['state_trees'].iteritems():
+        todo[k] = v
 
     return {
         'base': {
