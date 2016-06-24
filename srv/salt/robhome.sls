@@ -19,7 +19,8 @@ robhome_sonos_firewall_xml:
     - group: root
   cmd.run:
     # Could not get the service to restart properly after adding the rule
-    - name: firewall-cmd --zone=public --add-service=sonos --permanent && systemctl firewalld reload
+    # Need to reload first to notify firewalld about sonos.xml
+    - name: systemctl firewalld reload && firewall-cmd --zone=public --add-service=sonos --permanent
 
 robhome_sonos_container:
   radia.docker_container:
