@@ -11,18 +11,21 @@ robhome_sonos_presets_json:
 # You can't use standard firewall state, because it requires
 # all the configuration for the firewall to be here. It's not
 # incremental like other configuration.
-robhome_sonos_firewall:
+robhome_sonos_firewall_xml:
   radia.plain_file:
     - file_name: /etc/firewalld/services/sonos.xml
     - source: salt://robhome/sonos.xml
     - user: root
     - group: root
+
+robhome_sonos_firewall:
   # Must come next, because the firewalld needs to be restarted if file changes
   service.running:
     - name: firewalld.service
     - enable: True
-    - watch:
-      - radia: robhome_sonos_firewall
+    - reload: True
+    - onchanges:
+      - radia: robhome_sonos_firewall_xml
   cmd.run:
     - name: firewall-cmd --add-service=sonos --permanent
 
