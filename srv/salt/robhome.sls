@@ -17,17 +17,9 @@ robhome_sonos_firewall_xml:
     - source: salt://robhome/sonos.xml
     - user: root
     - group: root
-
-robhome_sonos_firewall:
-  # Must come next, because the firewalld needs to be restarted if file changes
-  service.running:
-    - name: firewalld.service
-    - enable: True
-    - reload: True
-    - onchanges:
-      - radia: robhome_sonos_firewall_xml
   cmd.run:
-    - name: firewall-cmd --zone=public --add-service=sonos --permanent
+    # Could not get the service to restart properly after adding the rule
+    - name: firewall-cmd --zone=public --add-service=sonos --permanent && systemctl firewalld reload
 
 robhome_sonos_container:
   radia.docker_container:
