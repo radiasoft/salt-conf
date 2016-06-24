@@ -8,6 +8,9 @@ robhome_sonos_presets_json:
     - file_name: "{{ pillar.robhome.sonos.host_presets_json }}"
     - source: salt://robhome/presets.json
 
+# You can't use standard firewall state, because it requires
+# all the configuration for the firewall to be here. It's not
+# incremental like other configuration.
 robhome_sonos_firewall:
   radia.plain_file:
     - file_name: /etc/firewalld/services/sonos.xml
@@ -19,7 +22,7 @@ robhome_sonos_firewall:
     - name: firewalld.service
     - enable: True
     - watch:
-      - file: /etc/firewalld/services/sonos.xml
+      - file: robhome_sonos_firewall
   cmd.run:
     - name: firewall-cmd --add-service=sonos --permanent
 
