@@ -8,6 +8,13 @@ robhome_sonos_presets_json:
     - file_name: "{{ pillar.robhome.sonos.host_presets_json }}"
     - source: salt://robhome/presets.json
 
+robhom_sonos_firewall:
+  firewalld.present:
+    - name: public
+    - ports:
+        - {{ pillar.robhome.sonos.port }}/tcp
+        - {{ pillar.robhome.sonos.callback_port }}/tcp
+
 robhome_sonos_container:
   radia.docker_container:
     - container_name: sonos

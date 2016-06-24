@@ -8,6 +8,7 @@ state_trees:
 
 robhome:
   sonos:
+    callback_port: 3500
     guest_conf_d: "{{ zz.guest_conf_d }}"
     guest_presets_json: "{{ zz.guest_conf_d }}/presets.json"
     guest_settings_json: "{{ zz.guest_conf_d }}/settings.json"
