@@ -1,0 +1,15 @@
+[Unit]
+Description=COMSOL Server 5.2a
+Wants=network.target network-online.target lmcomsol.service
+After=network.target network-online.target lmcomsol.service
+
+[Service]
+Type=forking
+User=comsol
+Group=comsol
+TimeoutSec=300
+ProtectHome=off
+ExecStart=/usr/local/comsol52a/server/bin/comsol service
+
+[Install]
+WantedBy=multi-user.target
