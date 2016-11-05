@@ -26,6 +26,10 @@ c.DockerSpawner.volumes = {
         'bind': '{{ pillar.jupyterhub.guest_notebook_d }}',
         # NFS is allowed globally the "Z" modifies an selinux context for non-NFS files
     },
+    '{{ pillar.jupyterhub.host_scratch_d }}': {
+        # POSIT: notebook_dir in containers/radiasoft/beamsim-jupyter/build.sh
+        'bind': '{{ pillar.jupyterhub.guest_scratch_d }}',
+    },
 }
 
 c.GitHubOAuthenticator.client_id = '{{ pillar.jupyterhub.github_client_id }}'

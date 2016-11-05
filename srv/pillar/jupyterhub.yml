@@ -5,7 +5,9 @@
 #
 {% set zz = dict(
     guest_notebook_d='/home/' + stack.jupyter.guest_user + '/jupyter',
+    guest_scratch_d='/home/' + stack.jupyter.guest_user + '/scratch',
     host_notebook_d=stack.jupyter.root_notebook_d + '/{username}',
+    host_scratch_d=stack.jupyter.root_scratch_d + '/{username}',
     jupyterhub_conf_f='jupyterhub_config.py',
     jupyterhub_guest_conf_d='/srv/jupyterhub/conf',
     jupyterhub_host_conf_d='/var/lib/jupyterhub/conf',
@@ -34,12 +36,14 @@ jupyterhub:
   guest_conf_f: '{{ zz.jupyterhub_guest_conf_d }}/{{ zz.jupyterhub_conf_f }}'
   guest_notebook_d: '{{ zz.guest_notebook_d }}'
   guest_port: 8000
+  guest_scratch_d: '{{ zz.guest_scratch_d }}'
   guest_user: root
   host_conf_d: '{{ zz.jupyterhub_host_conf_d }}'
   host_conf_f: '{{ zz.jupyterhub_host_conf_d }}/{{ zz.jupyterhub_conf_f }}'
   host_name: localhost
   host_notebook_d: '{{ zz.host_notebook_d }}'
   host_port: 8000
+  host_scratch_d: '{{ zz.host_scratch_d }}'
   host_user: root
   image_name: radiasoft/jupyterhub
   postgresql_host_data_d: '{{ zz.postgresql_host_home_d }}/data'

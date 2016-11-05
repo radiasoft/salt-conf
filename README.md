@@ -184,7 +184,7 @@ salt -c run/etc/salt v3 --timeout=300 state.apply
 To reinstall the minion, you'll need to delete the key on the master before the curl install:
 
 ```bash
-salt-key -y -d v3
+salt-key -c run/etc/salt -y -d v3
 ```
 
 To reintsall the master, you need to delete the key on the minion:

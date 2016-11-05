@@ -43,7 +43,8 @@ jupyterhub_container:
         - [ {{ pillar.jupyterhub.host_port }}, {{ pillar.jupyterhub.guest_port }} ]
     - volumes:
         - [ {{ pillar.jupyterhub.host_conf_d }}, {{ pillar.jupyterhub.guest_conf_d }} ]
-        - [ {{ pillar.jupyter.nfs_local_d }}, {{ pillar.jupyter.nfs_local_d }} ]
+        - [ {{ pillar.jupyter.notebook_local_d }}, {{ pillar.jupyter.notebook_local_d }} ]
+        - [ {{ pillar.jupyter.scratch_local_d }}, {{ pillar.jupyter.scratch_local_d }} ]
     - want_docker_sock: True
     - watch:
         - jupyterhub_config

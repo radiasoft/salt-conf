@@ -41,7 +41,7 @@ _sudo_append() {
     local file=$1
     local line=$2
     if grep -s -q "$line" "$file"; then
-        return 1
+        return
     fi
     echo "$line" | sudo dd of="$file" oflag=append
     return
@@ -51,15 +51,20 @@ _sudo_append() {
 # Config and directories
 #
 root_dir=$PWD/run
-nfs_d=$root_dir/nfs
-nfs_local_d=/var/nfs/jupyter
+notebook_d=$root_dir/nfs/notebook
+notebook_local_d=/var/nfs/jupyter
+scratch_d=$root_dir/nfs/scratch
+scratch_local_d=/var/nfs/scratch
 salt_d=$root_dir/srv/salt
 minion_conf=99-radia-dev.conf
 mkdir -p $root_dir/{etc/salt/{master.d,pki},var/cache/salt,var/log/salt,var/run/salt,secrets} \
-      "$nfs_d" "$salt_d"
-sudo exportfs -u -v "*:$nfs_d" || true
-sudo chown vagrant:vagrant "$nfs_d"
-sudo chmod 755 "$nfs_d"
+      "$notebook_d" "$scratch_d" "$salt_d"
+sudo exportfs -u -v "*:$notebook_d" || true
+sudo exportfs -u -v "*:$scratch_d" || true
+sudo chown vagrant:vagrant "$notebook_d"
+sudo chown vagrant:vagrant "$scratch_d"
+sudo chmod 755 "$notebook_d"
+sudo chmod 755 "$scratch_d"
 
 #
 # Global actions
@@ -69,10 +74,10 @@ if [[ -z $(type -t salt-master) ]]; then
     curl salt.run | bash -s -- -P -M -X -N -d -Z -n git develop
 fi
 # Need no_root_squash, b/c $PWD is not accessible by root
-if _sudo_append /etc/hosts.allow 'rpcbind portmap lockd statd mountd rquotad: ALL' \
-    || _sudo_append /etc/exports "$nfs_d *(rw,no_root_squash,sync)"; then
-    sudo systemctl restart nfs
-fi
+_sudo_append /etc/hosts.allow 'rpcbind portmap lockd statd mountd rquotad: ALL'
+_sudo_append /etc/exports "$notebook_d *(rw,no_root_squash,sync)"
+_sudo_append /etc/exports "$scratch_d *(rw,no_root_squash,sync)"
+sudo systemctl restart nfs
 # Always export
 sudo exportfs -av
 
@@ -112,9 +117,12 @@ EOF
 
 _create srv/pillar/secrets/jupyter-dev.yml force <<EOF
 jupyter:
-  nfs_local_d: "$nfs_local_d"
-  nfs_remote_d: "$master_ip:$nfs_d"
-  root_notebook_d: "$nfs_local_d"
+  notebook_local_d: "$notebook_local_d"
+  notebook_remote_d: "$master_ip:$notebook_d"
+  scratch_local_d: "$scratch_local_d"
+  scratch_remote_d: "$master_ip:$scratch_d"
+  root_notebook_d: "$notebook_local_d"
+  root_scratch_d: "$scratch_local_d"
 EOF
 
 _create srv/pillar/secrets/jupyterhub-dev.yml force <<EOF
